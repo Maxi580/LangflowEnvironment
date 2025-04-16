@@ -1,0 +1,22 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    build-essential \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install uv
+RUN uv --version
+RUN uv venv
+
+RUN . .venv/bin/activate && uv pip install langflow -U
+
+ENV LANGFLOW_HOST=0.0.0.0
+ENV LANGFLOW_PORT=7860
+
+EXPOSE 7860
+
+CMD ["/bin/bash", "-c", "source .venv/bin/activate && uv run langflow run"]
