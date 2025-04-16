@@ -21,10 +21,24 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
-MODELS=("nomic-embed-text")
+if [ -z "$OLLAMA_MODELS" ]; then
+  echo "OLLAMA_MODELS not set, using default model: nomic-embed-text"
+  OLLAMA_MODELS="nomic-embed-text"
+else
+  echo "Using models from environment: $OLLAMA_MODELS"
+fi
+
+IFS=',' read -ra MODELS <<< "$OLLAMA_MODELS"
+
 INSTALLED_MODELS=$(ollama list)
 
 for model in "${MODELS[@]}"; do
+  model=$(echo "$model" | xargs)
+
+  if [ -z "$model" ]; then
+    continue
+  fi
+
   if echo "$INSTALLED_MODELS" | grep -q "$model"; then
     echo "Model $model already installed, skipping..."
   else
