@@ -128,7 +128,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-Ollama/.env
+ollama/.env
 .venv
 env/
 venv/
