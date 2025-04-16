@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Custom loading animation */
+.dot-typing {
+  position: relative;
+  left: -9999px;
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  background-color: #0ea5e9;
+  color: #0ea5e9;
+  box-shadow: 9984px 0 0 0 #0ea5e9, 9999px 0 0 0 #0ea5e9, 10014px 0 0 0 #0ea5e9;
+  animation: dot-typing 1.5s infinite linear;
+}
+
+@keyframes dot-typing {
+  0% {
+    box-shadow: 9984px 0 0 0 #0ea5e9, 9999px 0 0 0 #0ea5e9, 10014px 0 0 0 #0ea5e9;
+  }
+  16.667% {
+    box-shadow: 9984px -10px 0 0 #0ea5e9, 9999px 0 0 0 #0ea5e9, 10014px 0 0 0 #0ea5e9;
+  }
+  33.333% {
+    box-shadow: 9984px 0 0 0 #0ea5e9, 9999px 0 0 0 #0ea5e9, 10014px 0 0 0 #0ea5e9;
+  }
+  50% {
+    box-shadow: 9984px 0 0 0 #0ea5e9, 9999px -10px 0 0 #0ea5e9, 10014px 0 0 0 #0ea5e9;
+  }
+  66.667% {
+    box-shadow: 9984px 0 0 0 #0ea5e9, 9999px 0 0 0 #0ea5e9, 10014px 0 0 0 #0ea5e9;
+  }
+  83.333% {
+    box-shadow: 9984px 0 0 0 #0ea5e9, 9999px 0 0 0 #0ea5e9, 10014px -10px 0 0 #0ea5e9;
+  }
+  100% {
+    box-shadow: 9984px 0 0 0 #0ea5e9, 9999px 0 0 0 #0ea5e9, 10014px 0 0 0 #0ea5e9;
+  }
+}
+
+/* Pulse glow effect */
+.glow-pulse {
+  animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+  from {
+    box-shadow: 0 0 5px rgba(14, 165, 233, 0.2), 0 0 10px rgba(14, 165, 233, 0.2);
+  }
+  to {
+    box-shadow: 0 0 10px rgba(14, 165, 233, 0.5), 0 0 20px rgba(14, 165, 233, 0.5);
+  }
+}
