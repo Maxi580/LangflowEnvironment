@@ -2,7 +2,9 @@ version: '3'
 
 services:
   ollama:
-    image: ollama/ollama:latest
+    build:
+      context: ./ollama
+      dockerfile: Dockerfile
     container_name: ollama
     hostname: ollama.local
     ports:
@@ -57,6 +59,8 @@ services:
     depends_on:
       - ollama
       - qdrant
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:7860/health" ]
       interval: 30s
