@@ -11,7 +11,7 @@ function Prompt() {
   const [showConfig, setShowConfig] = useState(false);
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [ setError] = useState(null);
+  const [error, setError] = useState(null);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
