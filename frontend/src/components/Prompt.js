@@ -9,6 +9,10 @@ function Prompt() {
 
   const [userInput, setUserInput] = useState('');
   const [showConfig, setShowConfig] = useState(false);
+  const [showFlowSelector, setShowFlowSelector] = useState(false);
+  const [flows, setFlows] = useState([]);
+  const [flowsLoading, setFlowsLoading] = useState(false);
+  const [flowsError, setFlowsError] = useState(null);
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -35,6 +39,49 @@ function Prompt() {
       localStorage.setItem('langflow_session_id', `session_${Date.now()}`);
     }
   }, []);
+
+  // Fetch flows when flow selector is opened
+  useEffect(() => {
+    if (showFlowSelector) {
+      fetchFlows();
+    }
+  }, [showFlowSelector]);
+
+  // Function to fetch all available flows
+  const fetchFlows = async () => {
+    setFlowsLoading(true);
+    setFlowsError(null);
+
+    try {
+      const flowsUrl = `${config.api.getFlowsUrl()}?remove_example_flows=true`;
+
+      const response = await fetch(flowsUrl, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error fetching flows: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Flows response:", data);
+
+      if (Array.isArray(data)) {
+        setFlows(data);
+      } else {
+        console.error("Unexpected flows response format:", data);
+        setFlows([]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch flows:", err);
+      setFlowsError(err.message);
+    } finally {
+      setFlowsLoading(false);
+    }
+  };
 
   // Extract the actual text message from LangFlow's complex response structure
   const extractBotResponse = (data) => {
@@ -99,6 +146,12 @@ function Prompt() {
     e.preventDefault();
 
     if (!userInput.trim()) return;
+
+    if (!flowId) {
+      setError("No Flow ID set. Please select a flow from the Flow Selector.");
+      setShowFlowSelector(true);
+      return;
+    }
 
     const messageText = userInput.trim();
     setUserInput('');
@@ -172,16 +225,112 @@ function Prompt() {
     }
   };
 
-  // Save the updated flowId
-  const handleSaveFlowId = (e) => {
-    e.preventDefault();
-    setShowConfig(false);
+  // Handle flow selection
+  const handleSelectFlow = (selectedFlow) => {
+    setFlowId(selectedFlow.id);
+    setShowFlowSelector(false);
+
+    // Add a system message to indicate flow change
+    setMessages(prev => [...prev, {
+      id: Date.now(),
+      text: `Flow changed to: ${selectedFlow.name}`,
+      sender: 'system',
+      timestamp: new Date()
+    }]);
+  };
+
+  // Flow Selector Component
+  const FlowSelector = () => {
+    return (
+      <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 mb-6 shadow-lg">
+        <h3 className="text-lg font-medium text-white mb-3">Available Flows</h3>
+
+        {flowsLoading && (
+          <div className="py-3 text-slate-300 text-sm">
+            <div className="flex items-center">
+              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Loading available flows...
+            </div>
+          </div>
+        )}
+
+        {flowsError && (
+          <div className="py-3 text-red-400 text-sm">
+            Error loading flows: {flowsError}
+            <button
+              onClick={fetchFlows}
+              className="ml-2 text-blue-400 hover:text-blue-300 underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!flowsLoading && !flowsError && flows.length === 0 && (
+          <div className="py-3 text-slate-300 text-sm">
+            No flows found. Create a flow in LangFlow first.
+          </div>
+        )}
+
+        {!flowsLoading && !flowsError && flows.length > 0 && (
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+            {flows.map(flow => (
+              <div
+                key={flow.id}
+                onClick={() => handleSelectFlow(flow)}
+                className={`flex justify-between items-center p-3 ${
+                  flow.id === flowId 
+                    ? 'bg-blue-700 hover:bg-blue-600' 
+                    : 'bg-slate-700 hover:bg-slate-600'
+                } rounded-lg cursor-pointer transition-colors`}
+              >
+                <div>
+                  <div className="text-white font-medium truncate">{flow.name}</div>
+                  <div className="text-slate-400 text-xs truncate">{flow.id}</div>
+                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={() => setShowFlowSelector(false)}
+            className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-md mr-2"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={fetchFlows}
+            className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md"
+          >
+            Refresh Flows
+          </button>
+        </div>
+      </div>
+    );
   };
 
   return (
     <div className="flex flex-col w-full max-w-4xl mx-auto">
-      {/* Settings button */}
-      <div className="flex justify-end mb-4">
+      {/* Settings and Flow Selector buttons */}
+      <div className="flex justify-end mb-4 space-x-2">
+        <button
+          onClick={() => setShowFlowSelector(!showFlowSelector)}
+          className="flex items-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700
+                   text-white rounded-lg text-sm transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
+          </svg>
+          Flows
+        </button>
         <button
           onClick={() => setShowConfig(!showConfig)}
           className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600
@@ -194,16 +343,22 @@ function Prompt() {
         </button>
       </div>
 
+      {/* Flow selector */}
+      {showFlowSelector && <FlowSelector />}
+
       {/* Configuration panel */}
       {showConfig && (
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 mb-6 shadow-lg">
-          <form onSubmit={handleSaveFlowId} className="space-y-4">
+          <div className="space-y-4">
             <div>
               <label htmlFor="flowId" className="block text-sm font-medium text-slate-300 mb-1">
-                LangFlow Flow ID
+                Current LangFlow Flow ID
               </label>
               <div className="text-xs text-slate-400 mb-2">
-                Enter the ID of your LangFlow agent. You can find this in the URL when editing your flow.
+                {flowId ?
+                  "Current Flow ID is set. You can also select a flow using the Flows button." :
+                  "No Flow ID set. Please select a flow using the Flows button or enter an ID manually."
+                }
               </div>
               <input
                 type="text"
@@ -219,18 +374,23 @@ function Prompt() {
               <button
                 type="button"
                 onClick={() => setShowConfig(false)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md mr-2"
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md"
               >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
-              >
-                Save
+                Close
               </button>
             </div>
-          </form>
+          </div>
+        </div>
+      )}
+
+      {/* Display current flow name if available */}
+      {flowId && flows.length > 0 && (
+        <div className="mb-4 bg-slate-800/50 px-4 py-2 rounded-lg border border-slate-700">
+          <div className="text-xs text-slate-400">Current Flow:</div>
+          <div className="text-sm text-slate-200 font-medium">
+            {flows.find(f => f.id === flowId)?.name || 'Unknown Flow'}
+          </div>
+          <div className="text-xs text-slate-400 font-mono truncate">{flowId}</div>
         </div>
       )}
 
@@ -249,6 +409,14 @@ function Prompt() {
               <p className="text-slate-400 max-w-md mb-6">
                 Ask me anything and I'll respond using your LangFlow agent.
               </p>
+              {!flowId && (
+                <button
+                  onClick={() => setShowFlowSelector(true)}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
+                >
+                  Select a Flow to Begin
+                </button>
+              )}
             </div>
           ) : (
             messages.map((message) => (
@@ -262,7 +430,9 @@ function Prompt() {
                       ? 'bg-blue-600 text-white' 
                       : message.sender === 'error'
                         ? 'bg-red-600 text-white'
-                        : 'bg-slate-700 text-white'
+                        : message.sender === 'system'
+                          ? 'bg-indigo-500 text-white'
+                          : 'bg-slate-700 text-white'
                   }`}
                 >
                   <p className="whitespace-pre-wrap">{message.text}</p>
@@ -302,7 +472,7 @@ function Prompt() {
             />
             <button
               type="submit"
-              disabled={isLoading || !userInput.trim()}
+              disabled={isLoading || !userInput.trim() || !flowId}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700
                        focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
                        disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
