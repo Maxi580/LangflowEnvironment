@@ -16,9 +16,11 @@ function Prompt() {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Save flowId to localStorage when it changes
   useEffect(() => {
@@ -81,6 +83,66 @@ function Prompt() {
     } finally {
       setFlowsLoading(false);
     }
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(config.api.getFlowUploadUrl(), {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed with status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Upload response:", data);
+
+      // Refresh flows list after upload
+      await fetchFlows();
+
+      // If we got back flow data, select the first one
+      if (Array.isArray(data) && data.length > 0) {
+        setFlowId(data[0].id);
+
+        // Add a system message to indicate flow change
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          text: `Flow uploaded and selected: ${data[0].name}`,
+          sender: 'system',
+          timestamp: new Date()
+        }]);
+      }
+    } catch (err) {
+      console.error("Error uploading flow:", err);
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        text: `Error uploading flow: ${err.message}`,
+        sender: 'error',
+        timestamp: new Date()
+      }]);
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Trigger file input click
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
   };
 
   // Extract the actual text message from LangFlow's complex response structure
@@ -271,7 +333,7 @@ function Prompt() {
 
         {!flowsLoading && !flowsError && flows.length === 0 && (
           <div className="py-3 text-slate-300 text-sm">
-            No flows found. Create a flow in LangFlow first.
+            No flows found. Create a flow in LangFlow first or upload one.
           </div>
         )}
 
@@ -319,7 +381,7 @@ function Prompt() {
 
   return (
     <div className="flex flex-col w-full max-w-4xl mx-auto">
-      {/* Settings and Flow Selector buttons */}
+      {/* Settings, Upload and Flow Selector buttons */}
       <div className="flex justify-end mb-4 space-x-2">
         <button
           onClick={() => setShowFlowSelector(!showFlowSelector)}
@@ -331,6 +393,37 @@ function Prompt() {
           </svg>
           Flows
         </button>
+        <button
+          onClick={handleUploadClick}
+          disabled={isUploading}
+          className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700
+                   text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:bg-green-800"
+        >
+          {isUploading ? (
+            <>
+              <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Uploading...
+            </>
+          ) : (
+            <>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              </svg>
+              Upload Flow
+            </>
+          )}
+        </button>
+        {/* Hidden file input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+          accept=".json,.yaml,.yml"
+          className="hidden"
+        />
         <button
           onClick={() => setShowConfig(!showConfig)}
           className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600
@@ -410,12 +503,20 @@ function Prompt() {
                 Ask me anything and I'll respond using your LangFlow agent.
               </p>
               {!flowId && (
-                <button
-                  onClick={() => setShowFlowSelector(true)}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
-                >
-                  Select a Flow to Begin
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowFlowSelector(true)}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
+                  >
+                    Select a Flow
+                  </button>
+                  <button
+                    onClick={handleUploadClick}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg"
+                  >
+                    Upload a Flow
+                  </button>
+                </div>
               )}
             </div>
           ) : (

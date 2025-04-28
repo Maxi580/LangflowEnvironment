@@ -9,7 +9,8 @@ const config = {
     endpoints: {
       run: 'run',
       flows: 'flows',
-      importFlow: 'flows/import'
+      importFlow: 'flows/import',
+      uploadFlow: 'flows/upload'
     },
 
     getRunUrl: function(flowId) {
@@ -18,6 +19,10 @@ const config = {
 
     getFlowsUrl: function() {
       return `${this.baseUrl}/api/${this.version}/${this.endpoints.flows}/`;
+    },
+
+    getFlowUploadUrl: function() {
+      return `${this.baseUrl}/api/${this.version}/${this.endpoints.uploadFlow}/`;
     }
   }
 };
