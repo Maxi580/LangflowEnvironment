@@ -1,12 +1,30 @@
 const config = {
-  // Default Flow ID - Replace this with your actual Flow ID
   defaultFlowId: '',
 
-  // API base URL for LangFlow
-  apiBaseUrl: '/api',
+  api: {
+    baseUrl: 'http://localhost:7860',
 
-  // API version
-  apiVersion: 'v1',
+    version: 'v1',
+    // Endpoints
+    endpoints: {
+      run: 'run',
+      flows: 'flows',
+      importFlow: 'flows/import'
+    },
+
+    getRunUrl: function(flowId) {
+      return `${this.baseUrl}/api/${this.version}/${this.endpoints.run}/${flowId}`;
+    },
+
+    getImportUrl: function() {
+      return `${this.baseUrl}/api/${this.version}/${this.endpoints.importFlow}`;
+    },
+
+    // New method for creating flows
+    getFlowsUrl: function() {
+      return `${this.baseUrl}/api/${this.version}/${this.endpoints.flows}`;
+    }
+  }
 };
 
 export default config;

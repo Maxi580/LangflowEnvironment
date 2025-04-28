@@ -36,6 +36,65 @@ function Prompt() {
     }
   }, []);
 
+  // Extract the actual text message from LangFlow's complex response structure
+  const extractBotResponse = (data) => {
+    try {
+      // Check for empty outputs array
+      if (data.outputs && data.outputs.length > 0) {
+        const firstOutput = data.outputs[0];
+
+        // Check if outputs is empty array
+        if (firstOutput.outputs && firstOutput.outputs.length === 0) {
+          return "No response received from LangFlow. The agent may not have generated any output.";
+        }
+
+        if (firstOutput.outputs && firstOutput.outputs.length > 0) {
+          const messageOutput = firstOutput.outputs[0];
+
+          // Try to get from messages array first
+          if (messageOutput.messages && messageOutput.messages.length > 0) {
+            return messageOutput.messages[0].message;
+          }
+
+          // Try results.message.text if messages isn't available
+          if (messageOutput.results?.message?.text) {
+            return messageOutput.results.message.text;
+          }
+
+          // Try direct message property
+          if (messageOutput.message?.message) {
+            return messageOutput.message.message;
+          }
+        }
+      }
+
+      // Fallbacks for different response structures
+      if (data.result) {
+        return data.result;
+      }
+
+      if (data.output) {
+        return data.output;
+      }
+
+      if (typeof data === 'string') {
+        return data;
+      }
+
+      // Check if we have outputs array but with empty outputs
+      if (data.outputs && data.outputs.length > 0 &&
+          data.outputs[0].outputs && data.outputs[0].outputs.length === 0) {
+        return "No response received from LangFlow. The agent may not have generated any output.";
+      }
+
+      // Last resort: stringify the response but warn the user
+      return `Response format unexpected. Please check your LangFlow configuration. Raw response: ${JSON.stringify(data).slice(0, 100)}...`;
+    } catch (err) {
+      console.error("Error extracting bot response:", err);
+      return "Failed to parse response. Please check your LangFlow configuration.";
+    }
+  };
+
   const handleSend = async (e) => {
     e.preventDefault();
 
@@ -56,14 +115,12 @@ function Prompt() {
     setError(null);
 
     try {
-      // Use the full URL instead of relying on the proxy
-      const apiUrl = `http://localhost:7860/api/v1/run/${flowId}`;
+      const apiUrl = config.api.getRunUrl(flowId);
 
       const payload = {
         input_value: messageText,
         output_type: 'chat',
         input_type: 'chat',
-        // Optional: Generate a unique session ID for conversation history
         session_id: localStorage.getItem('langflow_session_id') || `session_${Date.now()}`
       };
 
@@ -75,10 +132,6 @@ function Prompt() {
         body: JSON.stringify(payload)
       };
 
-      // Debug information
-      console.log('API URL:', apiUrl);
-      console.log('Payload:', payload);
-
       // Make API call to LangFlow
       const response = await fetch(apiUrl, options);
 
@@ -87,18 +140,11 @@ function Prompt() {
       }
 
       const data = await response.json();
+      console.log("LangFlow response:", data); // Debug log
 
-      // Extract response based on LangFlow's output format
-      let botResponse;
-      if (data.result) {
-        botResponse = data.result;
-      } else if (data.output) {
-        botResponse = data.output;
-      } else {
-        botResponse = JSON.stringify(data);
-      }
+      // Extract the actual text response
+      const botResponse = extractBotResponse(data);
 
-      // Add bot message to chat
       setMessages(prev => [...prev, {
         id: Date.now(),
         text: botResponse,
