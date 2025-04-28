@@ -23,6 +23,10 @@ const config = {
 
     getFlowUploadUrl: function() {
       return `${this.baseUrl}/api/${this.version}/${this.endpoints.uploadFlow}/`;
+    },
+
+    getFlowDeleteUrl: function(flowId) {
+      return `${this.baseUrl}/api/${this.version}/${this.endpoints.flows}/${flowId}`;
     }
   }
 };

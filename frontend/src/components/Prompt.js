@@ -17,6 +17,7 @@ function Prompt() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -137,6 +138,70 @@ function Prompt() {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+    }
+  };
+
+  // Handle flow deletion
+  const handleDeleteFlow = async (flowToDelete, e) => {
+    // Stop event propagation to prevent selecting the flow when clicking delete
+    e.stopPropagation();
+
+    // Confirm before deleting
+    if (!window.confirm(`Are you sure you want to delete the flow "${flowToDelete.name}"?`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      const deleteUrl = config.api.getFlowDeleteUrl(flowToDelete.id);
+
+      const response = await fetch(deleteUrl, {
+        method: 'DELETE',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Delete failed with status: ${response.status}`);
+      }
+
+      console.log(`Flow deleted: ${flowToDelete.id}`);
+
+      // If the deleted flow was selected, clear the selection
+      if (flowId === flowToDelete.id) {
+        setFlowId('');
+        // Add a system message to indicate flow removal
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          text: `Current flow "${flowToDelete.name}" was deleted.`,
+          sender: 'system',
+          timestamp: new Date()
+        }]);
+      } else {
+        // Just add a notification
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          text: `Flow "${flowToDelete.name}" was deleted.`,
+          sender: 'system',
+          timestamp: new Date()
+        }]);
+      }
+
+      // Refresh the flows list
+      await fetchFlows();
+
+    } catch (err) {
+      console.error("Error deleting flow:", err);
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        text: `Error deleting flow: ${err.message}`,
+        sender: 'error',
+        timestamp: new Date()
+      }]);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -342,20 +407,36 @@ function Prompt() {
             {flows.map(flow => (
               <div
                 key={flow.id}
-                onClick={() => handleSelectFlow(flow)}
                 className={`flex justify-between items-center p-3 ${
                   flow.id === flowId 
                     ? 'bg-blue-700 hover:bg-blue-600' 
                     : 'bg-slate-700 hover:bg-slate-600'
                 } rounded-lg cursor-pointer transition-colors`}
               >
-                <div>
+                <div className="flex-grow" onClick={() => handleSelectFlow(flow)}>
                   <div className="text-white font-medium truncate">{flow.name}</div>
                   <div className="text-slate-400 text-xs truncate">{flow.id}</div>
                 </div>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                </svg>
+                <div className="flex items-center">
+                  <button
+                    onClick={(e) => handleDeleteFlow(flow, e)}
+                    disabled={isDeleting}
+                    className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-600 rounded-full transition-colors"
+                    title="Delete flow"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  <div
+                    onClick={() => handleSelectFlow(flow)}
+                    className="ml-2"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
