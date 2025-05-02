@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 
+
 def get_ollama_embedding(text: str, model: str = "nomic-embed-text", base_url: str = "http://localhost:11434") -> List[
     float]:
     """
