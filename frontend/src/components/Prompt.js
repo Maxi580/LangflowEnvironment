@@ -16,8 +16,8 @@ function Prompt() {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -86,128 +86,81 @@ function Prompt() {
     }
   };
 
-  // Handle file upload
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  // File handling functions
+  const handleFileUpload = async (event) => {
+    const files = event.target.files;
+    if (!files.length || !flowId) {
+      if (!flowId) {
+        setError("No Flow ID set. Please select a flow from the Flow Selector before uploading files.");
+        setShowFlowSelector(true);
+      }
+      return;
+    }
 
     setIsUploading(true);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      const results = [];
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
 
-      const response = await fetch(config.api.getFlowUploadUrl(), {
-        method: 'POST',
-        body: formData,
-      });
+        const response = await fetch(`${config.api.baseUrl}/api/v1/files/upload/${flowId}`, {
+          method: 'POST',
+          body: formData
+        });
 
-      if (!response.ok) {
-        throw new Error(`Upload failed with status: ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`Failed to upload ${file.name}`);
+        }
+
+        const result = await response.json();
+        results.push({
+          name: file.name,
+          path: result.file_path,
+          size: file.size,
+          type: file.type,
+          uploadedAt: new Date()
+        });
       }
 
-      const data = await response.json();
-      console.log("Upload response:", data);
+      setUploadedFiles(prev => [...prev, ...results]);
 
-      // Refresh flows list after upload
-      await fetchFlows();
-
-      // If we got back flow data, select the first one
-      if (Array.isArray(data) && data.length > 0) {
-        setFlowId(data[0].id);
-
-        // Add a system message to indicate flow change
-        setMessages(prev => [...prev, {
-          id: Date.now(),
-          text: `Flow uploaded and selected: ${data[0].name}`,
-          sender: 'system',
-          timestamp: new Date()
-        }]);
-      }
-    } catch (err) {
-      console.error("Error uploading flow:", err);
+      // Add a system message about uploaded files
       setMessages(prev => [...prev, {
         id: Date.now(),
-        text: `Error uploading flow: ${err.message}`,
-        sender: 'error',
+        text: `Files uploaded: ${results.map(f => f.name).join(', ')}`,
+        sender: 'system',
         timestamp: new Date()
       }]);
-    } finally {
-      setIsUploading(false);
+
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-    }
-  };
-
-  // Handle flow deletion
-  const handleDeleteFlow = async (flowToDelete, e) => {
-    // Stop event propagation to prevent selecting the flow when clicking delete
-    e.stopPropagation();
-
-    // Confirm before deleting
-    if (!window.confirm(`Are you sure you want to delete the flow "${flowToDelete.name}"?`)) {
-      return;
-    }
-
-    setIsDeleting(true);
-
-    try {
-      const deleteUrl = config.api.getFlowDeleteUrl(flowToDelete.id);
-
-      const response = await fetch(deleteUrl, {
-        method: 'DELETE',
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Delete failed with status: ${response.status}`);
-      }
-
-      console.log(`Flow deleted: ${flowToDelete.id}`);
-
-      // If the deleted flow was selected, clear the selection
-      if (flowId === flowToDelete.id) {
-        setFlowId('');
-        // Add a system message to indicate flow removal
-        setMessages(prev => [...prev, {
-          id: Date.now(),
-          text: `Current flow "${flowToDelete.name}" was deleted.`,
-          sender: 'system',
-          timestamp: new Date()
-        }]);
-      } else {
-        // Just add a notification
-        setMessages(prev => [...prev, {
-          id: Date.now(),
-          text: `Flow "${flowToDelete.name}" was deleted.`,
-          sender: 'system',
-          timestamp: new Date()
-        }]);
-      }
-
-      // Refresh the flows list
-      await fetchFlows();
 
     } catch (err) {
-      console.error("Error deleting flow:", err);
+      console.error('Error uploading files:', err);
+      setError(`Failed to upload files: ${err.message}`);
+
       setMessages(prev => [...prev, {
         id: Date.now(),
-        text: `Error deleting flow: ${err.message}`,
+        text: `Error uploading files: ${err.message}`,
         sender: 'error',
         timestamp: new Date()
       }]);
+
     } finally {
-      setIsDeleting(false);
+      setIsUploading(false);
     }
   };
 
-  // Trigger file input click
-  const handleUploadClick = () => {
-    fileInputRef.current?.click();
+  const removeFile = (index) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const clearAllFiles = () => {
+    setUploadedFiles([]);
   };
 
   // Extract the actual text message from LangFlow's complex response structure
@@ -272,7 +225,8 @@ function Prompt() {
   const handleSend = async (e) => {
     e.preventDefault();
 
-    if (!userInput.trim()) return;
+    // Allow sending if there's text input OR files (or both)
+    if (!userInput.trim() && uploadedFiles.length === 0) return;
 
     if (!flowId) {
       setError("No Flow ID set. Please select a flow from the Flow Selector.");
@@ -286,9 +240,10 @@ function Prompt() {
     // Add user message to chat
     setMessages(prev => [...prev, {
       id: Date.now(),
-      text: messageText,
+      text: messageText || (uploadedFiles.length > 0 ? "Sent files" : ""),
       sender: 'user',
-      timestamp: new Date()
+      timestamp: new Date(),
+      files: [...uploadedFiles] // Include file information in the message
     }]);
 
     setIsLoading(true);
@@ -297,10 +252,15 @@ function Prompt() {
     try {
       const apiUrl = config.api.getRunUrl(flowId);
 
+      // Create a formatted input string with file references
+      const fileRefs = uploadedFiles.length > 0
+        ? "\n\nFiles: " + uploadedFiles.map(f => f.path).join(", ")
+        : "";
+
       const payload = {
-        input_value: messageText,
+        input_value: messageText + fileRefs,
         output_type: 'chat',
-        input_type: 'chat',
+        input_type: 'chat', // Use 'chat' instead of 'json'
         session_id: localStorage.getItem('langflow_session_id') || `session_${Date.now()}`
       };
 
@@ -352,6 +312,13 @@ function Prompt() {
     }
   };
 
+  // Format file size for display
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' bytes';
+    else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    else return (bytes / 1048576).toFixed(1) + ' MB';
+  };
+
   // Handle flow selection
   const handleSelectFlow = (selectedFlow) => {
     setFlowId(selectedFlow.id);
@@ -398,7 +365,7 @@ function Prompt() {
 
         {!flowsLoading && !flowsError && flows.length === 0 && (
           <div className="py-3 text-slate-300 text-sm">
-            No flows found. Create a flow in LangFlow first or upload one.
+            No flows found. Create a flow in LangFlow first.
           </div>
         )}
 
@@ -407,36 +374,20 @@ function Prompt() {
             {flows.map(flow => (
               <div
                 key={flow.id}
+                onClick={() => handleSelectFlow(flow)}
                 className={`flex justify-between items-center p-3 ${
                   flow.id === flowId 
                     ? 'bg-blue-700 hover:bg-blue-600' 
                     : 'bg-slate-700 hover:bg-slate-600'
                 } rounded-lg cursor-pointer transition-colors`}
               >
-                <div className="flex-grow" onClick={() => handleSelectFlow(flow)}>
+                <div>
                   <div className="text-white font-medium truncate">{flow.name}</div>
                   <div className="text-slate-400 text-xs truncate">{flow.id}</div>
                 </div>
-                <div className="flex items-center">
-                  <button
-                    onClick={(e) => handleDeleteFlow(flow, e)}
-                    disabled={isDeleting}
-                    className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-600 rounded-full transition-colors"
-                    title="Delete flow"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                  </button>
-                  <div
-                    onClick={() => handleSelectFlow(flow)}
-                    className="ml-2"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                </svg>
               </div>
             ))}
           </div>
@@ -462,7 +413,7 @@ function Prompt() {
 
   return (
     <div className="flex flex-col w-full max-w-4xl mx-auto">
-      {/* Settings, Upload and Flow Selector buttons */}
+      {/* Settings and Flow Selector buttons */}
       <div className="flex justify-end mb-4 space-x-2">
         <button
           onClick={() => setShowFlowSelector(!showFlowSelector)}
@@ -474,37 +425,6 @@ function Prompt() {
           </svg>
           Flows
         </button>
-        <button
-          onClick={handleUploadClick}
-          disabled={isUploading}
-          className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700
-                   text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:bg-green-800"
-        >
-          {isUploading ? (
-            <>
-              <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Uploading...
-            </>
-          ) : (
-            <>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-              </svg>
-              Upload Flow
-            </>
-          )}
-        </button>
-        {/* Hidden file input */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileUpload}
-          accept=".json,.yaml,.yml"
-          className="hidden"
-        />
         <button
           onClick={() => setShowConfig(!showConfig)}
           className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600
@@ -568,6 +488,51 @@ function Prompt() {
         </div>
       )}
 
+      {/* Uploaded Files Panel */}
+      {uploadedFiles.length > 0 && (
+        <div className="mb-4 bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-lg">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-sm font-medium text-white">Uploaded Files ({uploadedFiles.length})</h3>
+            <button
+              onClick={clearAllFiles}
+              className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors"
+            >
+              Clear All
+            </button>
+          </div>
+          <div className="space-y-2 max-h-40 overflow-y-auto">
+            {uploadedFiles.map((file, index) => (
+              <div
+                key={index}
+                className="flex justify-between items-center bg-slate-700 rounded-lg p-2"
+              >
+                <div className="flex items-center">
+                  <div className="bg-slate-600 p-2 rounded mr-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-sm text-white truncate max-w-xs">{file.name}</div>
+                    <div className="text-xs text-slate-400">
+                      {formatFileSize(file.size)} • {new Date(file.uploadedAt).toLocaleTimeString()}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => removeFile(index)}
+                  className="ml-2 p-1 hover:bg-slate-600 rounded"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Chat container */}
       <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-lg overflow-hidden flex flex-col h-[600px]">
         {/* Messages display */}
@@ -584,20 +549,12 @@ function Prompt() {
                 Ask me anything and I'll respond using your LangFlow agent.
               </p>
               {!flowId && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowFlowSelector(true)}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
-                  >
-                    Select a Flow
-                  </button>
-                  <button
-                    onClick={handleUploadClick}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg"
-                  >
-                    Upload a Flow
-                  </button>
-                </div>
+                <button
+                  onClick={() => setShowFlowSelector(true)}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
+                >
+                  Select a Flow to Begin
+                </button>
               )}
             </div>
           ) : (
@@ -618,6 +575,20 @@ function Prompt() {
                   }`}
                 >
                   <p className="whitespace-pre-wrap">{message.text}</p>
+
+                  {/* Display file attachments */}
+                  {message.files && message.files.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-white/20">
+                      <div className="text-xs opacity-75">Attached files:</div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {message.files.map((file, idx) => (
+                          <div key={idx} className="text-xs bg-white/10 px-2 py-1 rounded">
+                            {file.name}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))
@@ -641,6 +612,37 @@ function Prompt() {
         {/* Input area */}
         <div className="border-t border-slate-700 p-4 bg-slate-800">
           <form onSubmit={handleSend} className="flex space-x-2">
+            {/* File upload button */}
+            <label className="relative cursor-pointer flex items-center justify-center">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                onChange={handleFileUpload}
+                className="sr-only"
+                disabled={isLoading || isUploading || !flowId}
+              />
+              <div
+                className={`p-2 rounded-lg transition-colors ${
+                  isUploading 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-slate-700 text-white hover:bg-slate-600'
+                } ${(!flowId || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {isUploading ? (
+                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a3 3 0 006 0V7a1 1 0 112 0v4a5 5 0 01-10 0V7a5 5 0 0110 0v4a1 1 0 11-2 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </div>
+            </label>
+
+            {/* Text input */}
             <input
               ref={inputRef}
               type="text"
@@ -652,9 +654,11 @@ function Prompt() {
                        focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               disabled={isLoading}
             />
+
+            {/* Send button */}
             <button
               type="submit"
-              disabled={isLoading || !userInput.trim() || !flowId}
+              disabled={isLoading || (!userInput.trim() && uploadedFiles.length === 0) || !flowId}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700
                        focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
                        disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
