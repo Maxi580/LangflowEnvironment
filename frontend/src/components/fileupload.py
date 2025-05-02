@@ -6,42 +6,6 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 
 
-def get_ollama_embedding(text: str, model: str = "nomic-embed-text", base_url: str = "http://localhost:11434") -> List[
-    float]:
-    """
-    Get embeddings directly from Ollama API
-
-    Args:
-        text: Text to embed
-        model: Embedding model to use (must be available in Ollama)
-        base_url: Ollama API base URL
-
-    Returns:
-        List of embedding values
-    """
-    url = f"{base_url}/api/embeddings"
-
-    payload = {
-        "model": model,
-        "prompt": text
-    }
-
-    try:
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-
-        result = response.json()
-        embedding = result.get("embedding")
-
-        if not embedding:
-            raise ValueError(f"No embedding returned from Ollama API: {response.text}")
-
-        return embedding
-    except requests.exceptions.RequestException as e:
-        print(f"Error connecting to Ollama API: {e}")
-        raise
-
-
 def check_ollama_connection(base_url: str = "http://localhost:11434") -> bool:
     """
     Check if Ollama API is reachable
@@ -92,6 +56,42 @@ def check_qdrant_connection(url: str = "http://localhost:6333") -> bool:
     except requests.exceptions.RequestException as e:
         print(f"✗ Qdrant connection failed: {e}")
         return False
+
+
+def get_ollama_embedding(text: str, model: str = "nomic-embed-text", base_url: str = "http://localhost:11434") -> List[
+    float]:
+    """
+    Get embeddings directly from Ollama API
+
+    Args:
+        text: Text to embed
+        model: Embedding model to use (must be available in Ollama)
+        base_url: Ollama API base URL
+
+    Returns:
+        List of embedding values
+    """
+    url = f"{base_url}/api/embeddings"
+
+    payload = {
+        "model": model,
+        "prompt": text
+    }
+
+    try:
+        response = requests.post(url, json=payload)
+        response.raise_for_status()
+
+        result = response.json()
+        embedding = result.get("embedding")
+
+        if not embedding:
+            raise ValueError(f"No embedding returned from Ollama API: {response.text}")
+
+        return embedding
+    except requests.exceptions.RequestException as e:
+        print(f"Error connecting to Ollama API: {e}")
+        raise
 
 
 def upload_files_to_qdrant(
@@ -240,7 +240,6 @@ def upload_files_to_qdrant(
         print(f"✗ Failed to get collection info: {e}")
 
 
-# Function to check if a file is already in Qdrant
 def is_file_in_qdrant(
         file_path: str,
         collection_name: str,
@@ -273,10 +272,9 @@ def is_file_in_qdrant(
                     }
                 ]
             },
-            limit=1  # We only need to know if at least one exists
+            limit=1
         )
 
-        # If we got any results, the file exists
         return len(response[0]) > 0
     except Exception as e:
         print(f"Error checking if file exists in Qdrant: {e}")
