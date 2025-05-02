@@ -104,7 +104,7 @@ def upload_files_to_qdrant(
         print_embeddings: bool = False
 ) -> None:
     """
-    Process files and upload to Qdrant using Ollama embeddings
+    Process files and upload to Qdrant using Ollama embeddings, matching Langflow's format
 
     Args:
         file_paths: List of file paths to process
@@ -194,14 +194,17 @@ def upload_files_to_qdrant(
 
                     point_id = file_idx * 10000 + chunk_idx
 
+                    # Using Langflow-compatible structure
                     points.append({
                         "id": point_id,
                         "vector": embedding,
                         "payload": {
-                            "text": chunk,
-                            "source": file_path,
-                            "chunk_idx": chunk_idx,
-                            "filename": os.path.basename(file_path)
+                            "page_content": chunk,  # Langflow uses page_content instead of text
+                            "metadata": {  # Nested metadata structure
+                                "file_path": file_path,  # Langflow seems to use file_path in metadata
+                                "chunk_idx": chunk_idx,
+                                "filename": os.path.basename(file_path)
+                            }
                         }
                     })
 
@@ -238,7 +241,7 @@ def upload_files_to_qdrant(
 if __name__ == "__main__":
     upload_files_to_qdrant(
         file_paths=["file.txt"],
-        collection_name="test_collection",
+        collection_name="langflow_compatible_collection",
         qdrant_url="http://localhost:6333",
         ollama_url="http://localhost:11434",
         ollama_model="nomic-embed-text",
