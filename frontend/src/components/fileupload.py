@@ -1,9 +1,9 @@
 import os
 import requests
+import uuid
 from typing import List, Dict, Any, Optional
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams  # Import correct models
-
+from qdrant_client.models import Distance, VectorParams
 
 def get_ollama_embedding(text: str, model: str = "nomic-embed-text", base_url: str = "http://localhost:11434") -> List[
     float]:
@@ -192,7 +192,8 @@ def upload_files_to_qdrant(
                 try:
                     embedding = get_ollama_embedding(chunk, ollama_model, ollama_url)
 
-                    point_id = file_idx * 10000 + chunk_idx
+                    # Generate a UUID for each point
+                    point_id = str(uuid.uuid4())
 
                     # Using Langflow-compatible structure
                     points.append({
@@ -238,9 +239,106 @@ def upload_files_to_qdrant(
         print(f"✗ Failed to get collection info: {e}")
 
 
+# Function to check if a file is already in Qdrant
+def is_file_in_qdrant(
+        file_path: str,
+        collection_name: str,
+        qdrant_url: str = "http://localhost:6333"
+) -> bool:
+    """
+    Check if a file is already indexed in Qdrant
+
+    Args:
+        file_path: Path to the file
+        collection_name: Name of Qdrant collection
+        qdrant_url: URL of Qdrant server
+
+    Returns:
+        True if file exists in collection, False otherwise
+    """
+    try:
+        client = QdrantClient(url=qdrant_url)
+
+        # Search for any points with this file path
+        response = client.scroll(
+            collection_name=collection_name,
+            scroll_filter={
+                "must": [
+                    {
+                        "key": "metadata.file_path",
+                        "match": {
+                            "value": file_path
+                        }
+                    }
+                ]
+            },
+            limit=1  # We only need to know if at least one exists
+        )
+
+        # If we got any results, the file exists
+        return len(response[0]) > 0
+    except Exception as e:
+        print(f"Error checking if file exists in Qdrant: {e}")
+        return False
+
+
+def delete_file_from_qdrant(
+        file_path: str,
+        collection_name: str,
+        qdrant_url: str = "http://localhost:6333"
+) -> bool:
+    """
+    Delete all points related to a specific file from Qdrant
+
+    Args:
+        file_path: Path to the file to delete
+        collection_name: Name of Qdrant collection
+        qdrant_url: URL of Qdrant server
+
+    Returns:
+        True if deletion was successful, False otherwise
+    """
+    try:
+        client = QdrantClient(url=qdrant_url)
+
+        response = client.scroll(
+            collection_name=collection_name,
+            scroll_filter={
+                "must": [
+                    {
+                        "key": "metadata.file_path",
+                        "match": {
+                            "value": file_path
+                        }
+                    }
+                ]
+            },
+            with_payload=False,
+            with_vectors=False
+        )
+
+        point_ids = [point.id for point in response[0]]
+
+        if not point_ids:
+            print(f"No points found for file: {file_path}")
+            return True
+
+        client.delete(
+            collection_name=collection_name,
+            points_selector=point_ids
+        )
+
+        print(f"✓ Deleted {len(point_ids)} points for file: {file_path}")
+        return True
+
+    except Exception as e:
+        print(f"✗ Error deleting file from Qdrant: {e}")
+        return False
+
+
 if __name__ == "__main__":
     upload_files_to_qdrant(
-        file_paths=["file.txt"],
+        file_paths=["file.txt", "file2.txt"],
         collection_name="langflow_compatible_collection",
         qdrant_url="http://localhost:6333",
         ollama_url="http://localhost:11434",
