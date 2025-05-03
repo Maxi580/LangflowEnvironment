@@ -37,6 +37,23 @@ function Prompt() {
     localStorage.setItem('langflow_flowId', flowId);
   }, [flowId]);
 
+  // Re-check server status when flow ID changes to ensure collection exists
+  useEffect(() => {
+    if (flowId) {
+      fetchServerStatus();
+    }
+  }, [flowId]);
+
+  // Refresh files when flow ID changes
+  useEffect(() => {
+    if (flowId) {
+      fetchFiles();
+    } else {
+      // If no flow ID, clear the files list
+      setFiles([]);
+    }
+  }, [flowId]);
+
   // Scroll to bottom of chat when messages update
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -67,9 +84,15 @@ function Prompt() {
   }, [showFlowSelector]);
 
   // Function to fetch server status
+  // Function to fetch server status
   const fetchServerStatus = async () => {
     try {
-      const response = await fetch(config.api.getStatusUrl());
+      // Pass the current flow ID as a query parameter if available
+      const url = flowId
+        ? `${config.api.getStatusUrl()}?flow_id=${encodeURIComponent(flowId)}`
+        : config.api.getStatusUrl();
+
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         setServerStatus(data);
@@ -134,7 +157,12 @@ function Prompt() {
     setFilesError(null);
 
     try {
-      const response = await fetch(config.api.getFilesUrl());
+      // Add flow_id parameter if it's available to filter files by current flow
+      const url = flowId
+        ? `${config.api.getFilesUrl()}?flow_id=${encodeURIComponent(flowId)}`
+        : config.api.getFilesUrl();
+
+      const response = await fetch(url);
 
       if (!response.ok) {
         throw new Error(`Error fetching files: ${response.status}`);
@@ -164,6 +192,13 @@ function Prompt() {
       return;
     }
 
+    // Check if flow ID is available
+    if (!flowId) {
+      setError("No Flow ID set. Please select a flow before uploading files.");
+      setShowFlowSelector(true);
+      return;
+    }
+
     setIsUploading(true);
 
     try {
@@ -174,7 +209,10 @@ function Prompt() {
         formData.append('file', filesToUpload[i]);
       }
 
-      const response = await fetch(config.api.getUploadUrl(), {
+      // Use the upload URL with the flow_id parameter
+      const uploadUrl = `${config.api.getUploadUrl()}?flow_id=${encodeURIComponent(flowId)}`;
+
+      const response = await fetch(uploadUrl, {
         method: 'POST',
         body: formData
       });
@@ -193,7 +231,7 @@ function Prompt() {
       const fileNames = Array.from(filesToUpload).map(f => f.name).join(', ');
       setMessages(prev => [...prev, {
         id: Date.now(),
-        text: `Files uploaded: ${fileNames}`,
+        text: `Files uploaded: ${fileNames} (stored in collection: ${flowId})`,
         sender: 'system',
         timestamp: new Date()
       }]);
@@ -220,13 +258,23 @@ function Prompt() {
 
   // Function to delete a file
   const handleDeleteFile = async (filePath) => {
+    // Check if flow ID is available
+    if (!flowId) {
+      setError("No Flow ID set. Please select a flow before deleting files.");
+      setShowFlowSelector(true);
+      return;
+    }
+
     try {
       const response = await fetch(config.api.getFilesUrl(), {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ file_path: filePath })
+        body: JSON.stringify({
+          file_path: filePath,
+          flow_id: flowId
+        })
       });
 
       if (!response.ok) {
@@ -240,7 +288,7 @@ function Prompt() {
       const fileName = filePath.split('/').pop().split('-').slice(1).join('-');
       setMessages(prev => [...prev, {
         id: Date.now(),
-        text: `File deleted: ${fileName}`,
+        text: `File deleted: ${fileName} (from collection: ${flowId})`,
         sender: 'system',
         timestamp: new Date()
       }]);
@@ -533,7 +581,7 @@ function Prompt() {
               multiple
               onChange={handleFileUpload}
               className="sr-only"
-              disabled={isUploading}
+              disabled={isUploading || !flowId}
             />
           </label>
         </div>
@@ -616,6 +664,16 @@ function Prompt() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Flow ID Info */}
+        {flowId && (
+          <div className="mt-4 pt-4 border-t border-slate-700">
+            <div className="text-xs text-slate-400 mb-1">Current collection:</div>
+            <div className="bg-slate-700 text-xs text-slate-300 px-2 py-1 rounded truncate font-mono">
+              {flowId}
+            </div>
           </div>
         )}
 

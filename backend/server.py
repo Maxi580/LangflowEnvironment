@@ -14,10 +14,7 @@ from fileupload import (
     upload_to_qdrant,
     delete_file_from_qdrant,
     detect_file_type,
-    OLLAMA_URL,
-    QDRANT_URL,
-    DEFAULT_COLLECTION,
-    DEFAULT_EMBEDDING_MODEL
+    OLLAMA_URL, get_files_from_collection,
 )
 
 load_dotenv()
@@ -37,6 +34,7 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 class FileDeleteRequest(BaseModel):
     file_path: str
+    flow_id: str
 
 
 @app.get("/health")
@@ -46,10 +44,11 @@ async def health_check():
 
 
 @app.get("/api/status")
-async def get_status():
-    """Check connection status to Ollama and Qdrant"""
+async def get_status(flow_id: str = Query(None, description="Flow ID to check/create collection for")):
+    """Check connection status to Ollama and Qdrant, optionally create a collection"""
     ollama_ok = check_ollama_connection()
-    qdrant_ok = check_qdrant_connection()
+    qdrant_ok = check_qdrant_connection(flow_id=flow_id)
+
     return {
         "ollama_connected": ollama_ok,
         "qdrant_connected": qdrant_ok
@@ -72,12 +71,15 @@ async def get_models():
 
 @app.post("/api/upload")
 async def upload_file(
-    file: UploadFile = File(...),
-    flow_id: str = Query(None, description="Flow ID to use as the collection name")
+        file: UploadFile = File(...),
+        flow_id: str = Query(..., description="Flow ID to use as the collection name")
 ):
     """Upload a file to Qdrant"""
     if not file:
         raise HTTPException(status_code=400, detail="No file provided")
+
+    if not flow_id:
+        raise HTTPException(status_code=400, detail="Flow ID is required")
 
     try:
         file_id = str(uuid.uuid4())
@@ -97,7 +99,7 @@ async def upload_file(
             file_path,
             file.filename,
             file_id,
-            collection_name=flow_id,
+            flow_id=flow_id
         )
 
         if not success:
@@ -108,12 +110,13 @@ async def upload_file(
             "file_name": file.filename,
             "file_path": file_path,
             "file_type": file_type,
+            "flow_id": flow_id,
             "status": "processed"
         }
 
     except Exception as e:
         try:
-            if os.path.exists(file_path):
+            if 'file_path' in locals() and os.path.exists(file_path):
                 os.remove(file_path)
         except:
             pass
@@ -127,7 +130,13 @@ async def delete_file(request: FileDeleteRequest):
         if not os.path.exists(request.file_path):
             raise HTTPException(status_code=404, detail="File not found")
 
-        deleted = delete_file_from_qdrant(request.file_path)
+        if not request.flow_id:
+            raise HTTPException(status_code=400, detail="Flow ID is required")
+
+        deleted = delete_file_from_qdrant(
+            request.file_path,
+            flow_id=request.flow_id
+        )
 
         try:
             os.remove(request.file_path)
@@ -138,7 +147,8 @@ async def delete_file(request: FileDeleteRequest):
         return {
             "qdrant_deleted": deleted,
             "disk_deleted": disk_deleted,
-            "file_path": request.file_path
+            "file_path": request.file_path,
+            "flow_id": request.flow_id
         }
 
     except HTTPException:
@@ -148,9 +158,16 @@ async def delete_file(request: FileDeleteRequest):
 
 
 @app.get("/api/files")
-async def list_files():
-    """List all files in the uploads directory"""
+async def list_files(flow_id: str = Query(None, description="Filter files by flow ID")):
+    """List all files in the uploads directory, optionally filtered by flow ID"""
     try:
+        if flow_id:
+            try:
+                files = get_files_from_collection(flow_id)
+                return {"files": files}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Error getting files, does collection exist: {str(e)}")
+
         files = []
         for file_path in UPLOADS_DIR.glob("*"):
             if file_path.is_file():
@@ -161,7 +178,7 @@ async def list_files():
                     "file_path": str(file_path),
                     "file_name": "-".join(file_path.name.split("-")[1:]),
                     "file_size": os.path.getsize(file_path),
-                    "file_type": file_type
+                    "file_type": file_type,
                 })
 
         return {"files": files}
