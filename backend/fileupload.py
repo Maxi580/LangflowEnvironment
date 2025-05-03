@@ -19,6 +19,15 @@ DEFAULT_COLLECTION = os.getenv("DEFAULT_COLLECTION", "langflow_documents")
 
 
 def check_ollama_connection(base_url: str = OLLAMA_URL) -> bool:
+    """
+    Check if Ollama API is reachable
+
+    Args:
+        base_url: Ollama API base URL
+
+    Returns:
+        True if connection successful, False otherwise
+    """
     try:
         response = requests.get(f"{base_url}/api/tags")
         if response.status_code == 200:
@@ -36,6 +45,15 @@ def check_ollama_connection(base_url: str = OLLAMA_URL) -> bool:
 
 
 def check_qdrant_connection(url: str = QDRANT_URL) -> bool:
+    """
+    Check if Qdrant API is reachable
+
+    Args:
+        url: Qdrant API URL
+
+    Returns:
+        True if connection successful, False otherwise
+    """
     try:
         response = requests.get(f"{url}/collections")
         if response.status_code == 200:
@@ -53,7 +71,19 @@ def check_qdrant_connection(url: str = QDRANT_URL) -> bool:
 
 
 def get_ollama_embedding(text: str, model: str = DEFAULT_EMBEDDING_MODEL, base_url: str = OLLAMA_URL) -> List[float]:
+    """
+    Get embeddings directly from Ollama API
+
+    Args:
+        text: Text to embed
+        model: Embedding model to use (must be available in Ollama)
+        base_url: Ollama API base URL
+
+    Returns:
+        List of embedding values
+    """
     url = f"{base_url}/api/embeddings"
+
     payload = {
         "model": model,
         "prompt": text
@@ -62,19 +92,38 @@ def get_ollama_embedding(text: str, model: str = DEFAULT_EMBEDDING_MODEL, base_u
     try:
         response = requests.post(url, json=payload)
         response.raise_for_status()
+
         result = response.json()
         embedding = result.get("embedding")
+
         if not embedding:
             raise ValueError(f"No embedding returned from Ollama API: {response.text}")
+
         return embedding
     except requests.exceptions.RequestException as e:
         print(f"Error connecting to Ollama API: {e}")
         raise
 
 
-def is_file_in_qdrant(file_path: str, collection_name: str, qdrant_url: str = QDRANT_URL) -> bool:
+def is_file_in_qdrant(
+        file_path: str,
+        collection_name: str = DEFAULT_COLLECTION,
+        qdrant_url: str = QDRANT_URL
+) -> bool:
+    """
+    Check if a file is already indexed in Qdrant
+
+    Args:
+        file_path: Path to the file
+        collection_name: Name of Qdrant collection
+        qdrant_url: URL of Qdrant server
+
+    Returns:
+        True if file exists in collection, False otherwise
+    """
     try:
         client = QdrantClient(url=qdrant_url)
+
         response = client.scroll(
             collection_name=collection_name,
             scroll_filter={
@@ -89,6 +138,7 @@ def is_file_in_qdrant(file_path: str, collection_name: str, qdrant_url: str = QD
             },
             limit=1
         )
+
         return len(response[0]) > 0
     except Exception as e:
         print(f"Error checking if file exists in Qdrant: {e}")
@@ -96,6 +146,15 @@ def is_file_in_qdrant(file_path: str, collection_name: str, qdrant_url: str = QD
 
 
 def detect_file_type(file_path: str) -> str:
+    """
+    Detect the file type based on extension and content
+
+    Args:
+        file_path: Path to the file
+
+    Returns:
+        String indicating file type ('text', 'pdf', or 'unknown')
+    """
     _, ext = os.path.splitext(file_path)
     ext = ext.lower()
 
@@ -127,6 +186,15 @@ def detect_file_type(file_path: str) -> str:
 
 
 def extract_text_from_pdf(file_path: str) -> str:
+    """
+    Extract text content from a PDF file
+
+    Args:
+        file_path: Path to the PDF file
+
+    Returns:
+        Extracted text content
+    """
     try:
         text = ""
         with open(file_path, "rb") as f:
@@ -134,6 +202,7 @@ def extract_text_from_pdf(file_path: str) -> str:
             for page_num in range(len(pdf_reader.pages)):
                 page = pdf_reader.pages[page_num]
                 text += page.extract_text() + "\n\n"
+
         return text
     except Exception as e:
         print(f"Error extracting text from PDF {file_path}: {e}")
@@ -141,15 +210,26 @@ def extract_text_from_pdf(file_path: str) -> str:
 
 
 def read_file_content(file_path: str) -> Tuple[str, str]:
+    """
+    Read content from a file based on its type
+
+    Args:
+        file_path: Path to the file
+
+    Returns:
+        Tuple of (file_content, file_type)
+    """
     file_type = detect_file_type(file_path)
 
     if file_type == 'text':
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
         return content, 'text'
+
     elif file_type == 'pdf':
         content = extract_text_from_pdf(file_path)
         return content, 'pdf'
+
     else:
         raise ValueError(f"Unsupported file type for {file_path}")
 
@@ -158,21 +238,33 @@ def upload_to_qdrant(
         file_path: str,
         file_name: str,
         file_id: str,
-        flow_id: str = None,
+        collection_name: str = DEFAULT_COLLECTION,
         embedding_model: str = DEFAULT_EMBEDDING_MODEL,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
         ollama_url: str = OLLAMA_URL,
         qdrant_url: str = QDRANT_URL,
 ) -> bool:
+    """
+    Process file from disk and upload to Qdrant
+
+    Args:
+        file_path: Path to the file
+        file_name: Original filename
+        file_id: Unique ID for this file
+        collection_name: Name of Qdrant collection
+        embedding_model: Embedding model to use
+        chunk_size: Size of text chunks
+        chunk_overlap: Overlap between chunks
+        ollama_url: URL for Ollama API
+        qdrant_url: URL for Qdrant API
+
+    Returns:
+        True if successful, False otherwise
+    """
     try:
         print(f"Processing file: {file_path}")
 
-        # Always use flow_id as collection name
-        collection_name = flow_id
-        print(f"Using collection name: {collection_name}")
-
-        # Read content based on file type
         try:
             content, file_type = read_file_content(file_path)
             print(f"File type detected: {file_type}")
@@ -220,6 +312,7 @@ def upload_to_qdrant(
                 print(f"Processing chunk {chunk_idx + 1}/{len(chunks)}")
 
             embedding = get_ollama_embedding(chunk, embedding_model, ollama_url)
+
             point_id = str(uuid.uuid4())
 
             points.append({
@@ -232,8 +325,7 @@ def upload_to_qdrant(
                         "file_id": file_id,
                         "chunk_idx": chunk_idx,
                         "filename": file_name,
-                        "file_type": file_type,
-                        "flow_id": flow_id
+                        "file_type": file_type
                     }
                 }
             })
@@ -256,11 +348,21 @@ def upload_to_qdrant(
 
 def delete_file_from_qdrant(
         file_path: str,
-        flow_id: str = None,
+        collection_name: str = DEFAULT_COLLECTION,
         qdrant_url: str = QDRANT_URL
 ) -> bool:
+    """
+    Delete all points related to a specific file from Qdrant
+
+    Args:
+        file_path: Path to the file to delete
+        collection_name: Name of Qdrant collection
+        qdrant_url: URL of Qdrant server
+
+    Returns:
+        True if deletion was successful, False otherwise
+    """
     try:
-        collection_name = flow_id
         client = QdrantClient(url=qdrant_url)
 
         response = client.scroll(
