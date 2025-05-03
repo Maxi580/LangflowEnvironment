@@ -16,8 +16,17 @@ function Prompt() {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [uploadedFiles, setUploadedFiles] = useState([]);
+
+  // New states for file management
+  const [files, setFiles] = useState([]);
+  const [isFilesLoading, setIsFilesLoading] = useState(false);
+  const [filesError, setFilesError] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [models, setModels] = useState([]);
+  const [serverStatus, setServerStatus] = useState({
+    ollama_connected: false,
+    qdrant_connected: false
+  });
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -41,6 +50,13 @@ function Prompt() {
     if (!localStorage.getItem('langflow_session_id')) {
       localStorage.setItem('langflow_session_id', `session_${Date.now()}`);
     }
+
+    // Load files on component mount
+    fetchFiles();
+
+    // Check server status and get available models
+    fetchServerStatus();
+    fetchModels();
   }, []);
 
   // Fetch flows when flow selector is opened
@@ -49,6 +65,32 @@ function Prompt() {
       fetchFlows();
     }
   }, [showFlowSelector]);
+
+  // Function to fetch server status
+  const fetchServerStatus = async () => {
+    try {
+      const response = await fetch(config.api.getStatusUrl());
+      if (response.ok) {
+        const data = await response.json();
+        setServerStatus(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch server status:", err);
+    }
+  };
+
+  // Function to fetch available models
+  const fetchModels = async () => {
+    try {
+      const response = await fetch(config.api.getModelsUrl());
+      if (response.ok) {
+        const data = await response.json();
+        setModels(data.models || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch models:", err);
+    }
+  };
 
   // Function to fetch all available flows
   const fetchFlows = async () => {
@@ -86,58 +128,75 @@ function Prompt() {
     }
   };
 
-  // File handling functions
-  const handleFileUpload = async (event) => {
-    const files = event.target.files;
-    if (!files.length || !flowId) {
-      if (!flowId) {
-        setError("No Flow ID set. Please select a flow from the Flow Selector before uploading files.");
-        setShowFlowSelector(true);
+  // Function to fetch all files
+  const fetchFiles = async () => {
+    setIsFilesLoading(true);
+    setFilesError(null);
+
+    try {
+      const response = await fetch(config.api.getFilesUrl());
+
+      if (!response.ok) {
+        throw new Error(`Error fetching files: ${response.status}`);
       }
+
+      const data = await response.json();
+      console.log("Files response:", data);
+
+      if (data.files) {
+        setFiles(data.files);
+      } else {
+        console.error("Unexpected files response format:", data);
+        setFiles([]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch files:", err);
+      setFilesError(err.message);
+    } finally {
+      setIsFilesLoading(false);
+    }
+  };
+
+  // Function to upload files
+  const handleFileUpload = async (event) => {
+    const filesToUpload = event.target.files;
+    if (!filesToUpload.length) {
       return;
     }
 
     setIsUploading(true);
 
     try {
-      const results = [];
-      for (const file of files) {
-        const formData = new FormData();
-        formData.append('file', file);
+      const formData = new FormData();
 
-        const response = await fetch(`${config.api.baseUrl}/api/v1/files/upload/${flowId}`, {
-          method: 'POST',
-          body: formData
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to upload ${file.name}`);
-        }
-
-        const result = await response.json();
-        results.push({
-          name: file.name,
-          path: result.file_path,
-          size: file.size,
-          type: file.type,
-          uploadedAt: new Date()
-        });
+      // Append all selected files to FormData
+      for (let i = 0; i < filesToUpload.length; i++) {
+        formData.append('file', filesToUpload[i]);
       }
 
-      setUploadedFiles(prev => [...prev, ...results]);
+      const response = await fetch(config.api.getUploadUrl(), {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to upload files: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log("Upload response:", result);
+
+      // Refresh file list after upload
+      fetchFiles();
 
       // Add a system message about uploaded files
+      const fileNames = Array.from(filesToUpload).map(f => f.name).join(', ');
       setMessages(prev => [...prev, {
         id: Date.now(),
-        text: `Files uploaded: ${results.map(f => f.name).join(', ')}`,
+        text: `Files uploaded: ${fileNames}`,
         sender: 'system',
         timestamp: new Date()
       }]);
-
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
 
     } catch (err) {
       console.error('Error uploading files:', err);
@@ -149,18 +208,47 @@ function Prompt() {
         sender: 'error',
         timestamp: new Date()
       }]);
-
     } finally {
       setIsUploading(false);
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
-  const removeFile = (index) => {
-    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
-  };
+  // Function to delete a file
+  const handleDeleteFile = async (filePath) => {
+    try {
+      const response = await fetch(config.api.getFilesUrl(), {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ file_path: filePath })
+      });
 
-  const clearAllFiles = () => {
-    setUploadedFiles([]);
+      if (!response.ok) {
+        throw new Error(`Failed to delete file: ${response.status}`);
+      }
+
+      // Refresh file list after deletion
+      fetchFiles();
+
+      // Add a system message about deleted file
+      const fileName = filePath.split('/').pop().split('-').slice(1).join('-');
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        text: `File deleted: ${fileName}`,
+        sender: 'system',
+        timestamp: new Date()
+      }]);
+
+    } catch (err) {
+      console.error('Error deleting file:', err);
+      setError(`Failed to delete file: ${err.message}`);
+    }
   };
 
   // Extract the actual text message from LangFlow's complex response structure
@@ -225,8 +313,8 @@ function Prompt() {
   const handleSend = async (e) => {
     e.preventDefault();
 
-    // Allow sending if there's text input OR files (or both)
-    if (!userInput.trim() && uploadedFiles.length === 0) return;
+    // Allow sending if there's text input
+    if (!userInput.trim()) return;
 
     if (!flowId) {
       setError("No Flow ID set. Please select a flow from the Flow Selector.");
@@ -237,13 +325,15 @@ function Prompt() {
     const messageText = userInput.trim();
     setUserInput('');
 
+    // Create a list of file references
+    const fileReferences = files.map(file => `${file.file_name} (${file.file_type})`).join(", ");
+
     // Add user message to chat
     setMessages(prev => [...prev, {
       id: Date.now(),
-      text: messageText || (uploadedFiles.length > 0 ? "Sent files" : ""),
+      text: messageText,
       sender: 'user',
-      timestamp: new Date(),
-      files: [...uploadedFiles] // Include file information in the message
+      timestamp: new Date()
     }]);
 
     setIsLoading(true);
@@ -252,15 +342,15 @@ function Prompt() {
     try {
       const apiUrl = config.api.getRunUrl(flowId);
 
-      // Create a formatted input string with file references
-      const fileRefs = uploadedFiles.length > 0
-        ? "\n\nFiles: " + uploadedFiles.map(f => f.path).join(", ")
-        : "";
+      // Create a formatted input string with mention of available files
+      const message = files.length > 0
+        ? `${messageText}\n\nAvailable files: ${fileReferences}`
+        : messageText;
 
       const payload = {
-        input_value: messageText + fileRefs,
+        input_value: message,
         output_type: 'chat',
-        input_type: 'chat', // Use 'chat' instead of 'json'
+        input_type: 'chat',
         session_id: localStorage.getItem('langflow_session_id') || `session_${Date.now()}`
       };
 
@@ -280,7 +370,7 @@ function Prompt() {
       }
 
       const data = await response.json();
-      console.log("LangFlow response:", data); // Debug log
+      console.log("LangFlow response:", data);
 
       // Extract the actual text response
       const botResponse = extractBotResponse(data);
@@ -411,264 +501,318 @@ function Prompt() {
     );
   };
 
-  return (
-    <div className="flex flex-col w-full max-w-4xl mx-auto">
-      {/* Settings and Flow Selector buttons */}
-      <div className="flex justify-end mb-4 space-x-2">
-        <button
-          onClick={() => setShowFlowSelector(!showFlowSelector)}
-          className="flex items-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700
-                   text-white rounded-lg text-sm transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
-          </svg>
-          Flows
-        </button>
-        <button
-          onClick={() => setShowConfig(!showConfig)}
-          className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600
-                   text-slate-200 rounded-lg text-sm transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-          </svg>
-          Settings
-        </button>
-      </div>
-
-      {/* Flow selector */}
-      {showFlowSelector && <FlowSelector />}
-
-      {/* Configuration panel */}
-      {showConfig && (
-        <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 mb-6 shadow-lg">
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="flowId" className="block text-sm font-medium text-slate-300 mb-1">
-                Current LangFlow Flow ID
-              </label>
-              <div className="text-xs text-slate-400 mb-2">
-                {flowId ?
-                  "Current Flow ID is set. You can also select a flow using the Flows button." :
-                  "No Flow ID set. Please select a flow using the Flows button or enter an ID manually."
-                }
-              </div>
-              <input
-                type="text"
-                id="flowId"
-                value={flowId}
-                onChange={(e) => setFlowId(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white
-                         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="e.g., 0f1d57c2-98b1-45c3-b7cc-6c0a38065d46"
-              />
+  // File Management Panel Component
+  const FileManagementPanel = () => {
+    return (
+      <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-lg mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium text-white">Files</h3>
+          <div className="flex space-x-2">
+            {/* Server Status Indicators */}
+            <div className="flex items-center">
+              <div className={`w-2 h-2 rounded-full mr-1 ${serverStatus.ollama_connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              <span className="text-xs text-slate-300">Ollama</span>
             </div>
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowConfig(false)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md"
-              >
-                Close
-              </button>
+            <div className="flex items-center">
+              <div className={`w-2 h-2 rounded-full mr-1 ${serverStatus.qdrant_connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              <span className="text-xs text-slate-300">Qdrant</span>
             </div>
           </div>
         </div>
-      )}
 
-      {/* Display current flow name if available */}
-      {flowId && flows.length > 0 && (
-        <div className="mb-4 bg-slate-800/50 px-4 py-2 rounded-lg border border-slate-700">
-          <div className="text-xs text-slate-400">Current Flow:</div>
-          <div className="text-sm text-slate-200 font-medium">
-            {flows.find(f => f.id === flowId)?.name || 'Unknown Flow'}
-          </div>
-          <div className="text-xs text-slate-400 font-mono truncate">{flowId}</div>
+        {/* Upload button */}
+        <div className="mb-4">
+          <label className="flex items-center justify-center w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            <span>Upload Files</span>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileUpload}
+              className="sr-only"
+              disabled={isUploading}
+            />
+          </label>
         </div>
-      )}
 
-      {/* Uploaded Files Panel */}
-      {uploadedFiles.length > 0 && (
-        <div className="mb-4 bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-lg">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-sm font-medium text-white">Uploaded Files ({uploadedFiles.length})</h3>
+        {/* Files loading state */}
+        {isFilesLoading && (
+          <div className="py-3 text-slate-300 text-sm">
+            <div className="flex items-center">
+              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Loading files...
+            </div>
+          </div>
+        )}
+
+        {/* Files error state */}
+        {filesError && (
+          <div className="py-3 text-red-400 text-sm">
+            Error loading files: {filesError}
             <button
-              onClick={clearAllFiles}
-              className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors"
+              onClick={fetchFiles}
+              className="ml-2 text-blue-400 hover:text-blue-300 underline"
             >
-              Clear All
+              Retry
             </button>
           </div>
-          <div className="space-y-2 max-h-40 overflow-y-auto">
-            {uploadedFiles.map((file, index) => (
+        )}
+
+        {/* No files state */}
+        {!isFilesLoading && !filesError && files.length === 0 && (
+          <div className="py-6 text-center text-slate-400 border border-dashed border-slate-700 rounded-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto mb-2 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p>No files uploaded yet</p>
+            <p className="text-xs mt-1">Upload files to use them in your conversations</p>
+          </div>
+        )}
+
+        {/* Files list */}
+        {!isFilesLoading && !filesError && files.length > 0 && (
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {files.map((file, index) => (
               <div
-                key={index}
-                className="flex justify-between items-center bg-slate-700 rounded-lg p-2"
+                key={file.file_id}
+                className="relative bg-slate-700 rounded-lg p-3 hover:bg-slate-600 transition-colors"
               >
-                <div className="flex items-center">
-                  <div className="bg-slate-600 p-2 rounded mr-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <div className="text-sm text-white truncate max-w-xs">{file.name}</div>
-                    <div className="text-xs text-slate-400">
-                      {formatFileSize(file.size)} • {new Date(file.uploadedAt).toLocaleTimeString()}
-                    </div>
-                  </div>
-                </div>
+                {/* Delete button */}
                 <button
-                  onClick={() => removeFile(index)}
-                  className="ml-2 p-1 hover:bg-slate-600 rounded"
+                  onClick={() => handleDeleteFile(file.file_path)}
+                  className="absolute top-2 right-2 p-1 bg-slate-800 hover:bg-red-600 rounded-full transition-colors"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
+
+                {/* File icon based on type */}
+                <div className="flex items-start">
+                  <div className="bg-slate-800 p-2 rounded mr-3 flex-shrink-0">
+                    {file.file_type === 'pdf' ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-white truncate">{file.file_name}</div>
+                    <div className="text-xs text-slate-400 mt-1">
+                      {formatFileSize(file.file_size)} • {file.file_type.toUpperCase()}
+                    </div>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Chat container */}
-      <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-lg overflow-hidden flex flex-col h-[600px]">
-        {/* Messages display */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="w-16 h-16 mb-5 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                </svg>
+        {/* Embedding model info */}
+        {models.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-slate-700">
+            <div className="text-xs text-slate-400 mb-1">Available embedding models:</div>
+            <div className="flex flex-wrap gap-2">
+              {models.map((model, idx) => (
+                <div key={idx} className="bg-slate-700 text-xs text-slate-300 px-2 py-1 rounded">
+                  {model}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex w-full max-w-7xl mx-auto gap-6">
+      {/* Chat column */}
+      <div className="flex-1 flex flex-col">
+        {/* Settings and Flow Selector buttons */}
+        <div className="flex justify-end mb-4 space-x-2">
+          <button
+            onClick={() => setShowFlowSelector(!showFlowSelector)}
+            className="flex items-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700
+                     text-white rounded-lg text-sm transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
+            </svg>
+            Flows
+          </button>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600
+                     text-slate-200 rounded-lg text-sm transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+<path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+            </svg>
+            Settings
+          </button>
+        </div>
+
+        {/* Flow selector */}
+        {showFlowSelector && <FlowSelector />}
+
+        {/* Configuration panel */}
+        {showConfig && (
+          <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 mb-6 shadow-lg">
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="flowId" className="block text-sm font-medium text-slate-300 mb-1">
+                  Current LangFlow Flow ID
+                </label>
+                <div className="text-xs text-slate-400 mb-2">
+                  {flowId ?
+                    "Current Flow ID is set. You can also select a flow using the Flows button." :
+                    "No Flow ID set. Please select a flow using the Flows button or enter an ID manually."
+                  }
+                </div>
+                <input
+                  type="text"
+                  id="flowId"
+                  value={flowId}
+                  onChange={(e) => setFlowId(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white
+                           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g., 0f1d57c2-98b1-45c3-b7cc-6c0a38065d46"
+                />
               </div>
-              <h3 className="text-xl font-bold text-white mb-2">Start a conversation</h3>
-              <p className="text-slate-400 max-w-md mb-6">
-                Ask me anything and I'll respond using your LangFlow agent.
-              </p>
-              {!flowId && (
+              <div className="flex justify-end">
                 <button
-                  onClick={() => setShowFlowSelector(true)}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
+                  type="button"
+                  onClick={() => setShowConfig(false)}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md"
                 >
-                  Select a Flow to Begin
+                  Close
                 </button>
-              )}
-            </div>
-          ) : (
-            messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-3/4 rounded-2xl px-4 py-3 ${
-                    message.sender === 'user' 
-                      ? 'bg-blue-600 text-white' 
-                      : message.sender === 'error'
-                        ? 'bg-red-600 text-white'
-                        : message.sender === 'system'
-                          ? 'bg-indigo-500 text-white'
-                          : 'bg-slate-700 text-white'
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap">{message.text}</p>
-
-                  {/* Display file attachments */}
-                  {message.files && message.files.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-white/20">
-                      <div className="text-xs opacity-75">Attached files:</div>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {message.files.map((file, idx) => (
-                          <div key={idx} className="text-xs bg-white/10 px-2 py-1 rounded">
-                            {file.name}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-slate-700 text-white rounded-2xl px-4 py-3">
-                <div className="flex space-x-2">
-                  <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce"></div>
-                  <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                  <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          <div ref={messagesEndRef} />
-        </div>
+        {/* Display current flow name if available */}
+        {flowId && flows.length > 0 && (
+          <div className="mb-4 bg-slate-800/50 px-4 py-2 rounded-lg border border-slate-700">
+            <div className="text-xs text-slate-400">Current Flow:</div>
+            <div className="text-sm text-slate-200 font-medium">
+              {flows.find(f => f.id === flowId)?.name || 'Unknown Flow'}
+            </div>
+            <div className="text-xs text-slate-400 font-mono truncate">{flowId}</div>
+          </div>
+        )}
 
-        {/* Input area */}
-        <div className="border-t border-slate-700 p-4 bg-slate-800">
-          <form onSubmit={handleSend} className="flex space-x-2">
-            {/* File upload button */}
-            <label className="relative cursor-pointer flex items-center justify-center">
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                onChange={handleFileUpload}
-                className="sr-only"
-                disabled={isLoading || isUploading || !flowId}
-              />
-              <div
-                className={`p-2 rounded-lg transition-colors ${
-                  isUploading 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-slate-700 text-white hover:bg-slate-600'
-                } ${(!flowId || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {isUploading ? (
-                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        {/* Chat container */}
+        <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-lg overflow-hidden flex flex-col h-[600px]">
+          {/* Messages display */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <div className="w-16 h-16 mb-5 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                   </svg>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a3 3 0 006 0V7a1 1 0 112 0v4a5 5 0 01-10 0V7a5 5 0 0110 0v4a1 1 0 11-2 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
-                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Start a conversation</h3>
+                <p className="text-slate-400 max-w-md mb-6">
+                  Ask me anything and I'll respond using your LangFlow agent.
+                </p>
+                {!flowId && (
+                  <button
+                    onClick={() => setShowFlowSelector(true)}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
+                  >
+                    Select a Flow to Begin
+                  </button>
                 )}
               </div>
-            </label>
+            ) : (
+              messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-3/4 rounded-2xl px-4 py-3 ${
+                      message.sender === 'user' 
+                        ? 'bg-blue-600 text-white' 
+                        : message.sender === 'error'
+                          ? 'bg-red-600 text-white'
+                          : message.sender === 'system'
+                            ? 'bg-indigo-500 text-white'
+                            : 'bg-slate-700 text-white'
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap">{message.text}</p>
+                  </div>
+                </div>
+              ))
+            )}
 
-            {/* Text input */}
-            <input
-              ref={inputRef}
-              type="text"
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
-              placeholder="Type your message..."
-              className="flex-1 px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg
-                       text-white placeholder-slate-400 focus:outline-none
-                       focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              disabled={isLoading}
-            />
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-slate-700 text-white rounded-2xl px-4 py-3">
+                  <div className="flex space-x-2">
+                    <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce"></div>
+                    <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
 
-            {/* Send button */}
-            <button
-              type="submit"
-              disabled={isLoading || (!userInput.trim() && uploadedFiles.length === 0) || !flowId}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700
-                       focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
-                       disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-              </svg>
-            </button>
-          </form>
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input area */}
+          <div className="border-t border-slate-700 p-4 bg-slate-800">
+            <form onSubmit={handleSend} className="flex space-x-2">
+              {/* Text input */}
+              <input
+                ref={inputRef}
+                type="text"
+                value={userInput}
+                onChange={(e) => setUserInput(e.target.value)}
+                placeholder="Type your message..."
+                className="flex-1 px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg
+                         text-white placeholder-slate-400 focus:outline-none
+                         focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                disabled={isLoading}
+              />
+
+              {/* Send button */}
+              <button
+                type="submit"
+                disabled={isLoading || !userInput.trim() || !flowId}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+                         focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
+                         disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                </svg>
+              </button>
+            </form>
+          </div>
         </div>
+      </div>
+
+      {/* Files column */}
+      <div className="w-80 flex-shrink-0">
+        <FileManagementPanel />
       </div>
     </div>
   );

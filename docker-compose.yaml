@@ -69,6 +69,30 @@ services:
       timeout: 10s
       retries: 3
 
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    hostname: backend.local
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_data:/app/uploads
+    restart: unless-stopped
+    networks:
+      - langflow-network
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - ollama
+      - qdrant
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   frontend:
     build:
       context: ./frontend
@@ -81,6 +105,7 @@ services:
       - /app/node_modules
     environment:
       - REACT_APP_LANGFLOW_API=http://localhost:7860
+      - REACT_APP_BACKEND_API=http://localhost:8000
       - NODE_ENV=development
       - WDS_SOCKET_HOST=0.0.0.0
       - CHOKIDAR_USEPOLLING=true
@@ -91,6 +116,7 @@ volumes:
   ollama_data:
   qdrant_data:
   langflow_data:
+  backend_data:
 
 networks:
   langflow-network:
