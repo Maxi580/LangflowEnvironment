@@ -27,6 +27,14 @@ const config = {
       return `${this.baseUrl}/api/${this.version}/${this.endpoints.flows}/`;
     },
 
+    getFlowUploadUrl: function() {
+      return `${this.baseUrl}/api/${this.version}/${this.endpoints.uploadFlow}/`;
+    },
+
+    getFlowDeleteUrl: function(flowId) {
+      return `${this.baseUrl}/api/${this.version}/${this.endpoints.flows}/${flowId}`;
+    },
+
     getFilesUrl: function() {
       return `${this.fileServerUrl}/api/${this.endpoints.files}`;
     },
