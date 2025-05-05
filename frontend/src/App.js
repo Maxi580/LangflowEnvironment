@@ -1,6 +1,6 @@
 import React from 'react';
 import './App.css';
-import Prompt from './components/Prompt';
+import Interface from './pages';
 
 function App() {
   return (
@@ -8,13 +8,13 @@ function App() {
       <header className="py-4 px-6 border-b border-slate-700">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <h1 className="text-2xl font-bold text-white tracking-tight">
-            LangFlow <span className="text-blue-400">AI</span> Assistant
+              KI <span className="text-blue-400">Agenten</span> Assistent
           </h1>
         </div>
       </header>
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-8">
-        <Prompt />
+        <Interface />
       </main>
 
       <footer className="py-3 px-6 border-t border-slate-700">
