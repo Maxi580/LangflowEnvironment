@@ -131,6 +131,8 @@ const FlowManagement = ({
     setUploadFlowError(null);
 
     try {
+      console.log(JSON.stringify(file, null, 2));
+
       const flowData = await flowService.readFlowFile(file);
 
       if (flowName && flowName.trim()) {

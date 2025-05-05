@@ -52,23 +52,40 @@ class FlowService {
     }
 
     try {
-      const uploadUrl = config.api.getFlowsUrl();
+      const uploadUrl = config.api.getFlowUploadUrl();
+
+      // Convert flow data to JSON string
+      const flowJson = JSON.stringify(flowData);
+
+      // Create a Blob from the JSON string
+      const blob = new Blob([flowJson], { type: 'application/json' });
+
+      // Create a File object from the Blob
+      const file = new File([blob], `flow_${Date.now()}.json`, { type: 'application/json' });
+
+      // Create FormData and append the file
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Add name and description if available
+      if (flowData.name) {
+        formData.append('name', flowData.name);
+      }
+
+      if (flowData.description) {
+        formData.append('description', flowData.description);
+      }
 
       const response = await fetch(uploadUrl, {
         method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(flowData)
+        body: formData
       });
 
       if (!response.ok) {
         throw new Error(`Upload failed with status: ${response.status}`);
       }
 
-      const result = await response.json();
-      return result;
+      return await response.json();
     } catch (error) {
       console.error('Error uploading flow:', error);
       throw error;
