@@ -1,6 +1,9 @@
 import React, { useState, useRef } from 'react';
 
-const UploadFlowComponent = ({ onUpload, onClose, isUploading, uploadError }) => {
+/**
+ * Form component for uploading LangFlow flows
+ */
+const UploadFlowForm = ({ onUpload, onClose, isUploading, uploadError }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [flowName, setFlowName] = useState('');
   const [flowDescription, setFlowDescription] = useState('');
@@ -74,21 +77,7 @@ const UploadFlowComponent = ({ onUpload, onClose, isUploading, uploadError }) =>
   };
 
   return (
-    <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-lg mb-6">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-medium text-white">Upload Flow</h3>
-        {onClose && (
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-white"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-            </svg>
-          </button>
-        )}
-      </div>
-
+    <>
       {/* Drop zone */}
       <div
         className={`border-2 border-dashed rounded-lg p-6 text-center mb-4 transition-colors
@@ -188,15 +177,13 @@ const UploadFlowComponent = ({ onUpload, onClose, isUploading, uploadError }) =>
 
       {/* Action buttons */}
       <div className="mt-6 flex justify-end space-x-3">
-        {onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md transition-colors"
-          >
-            Cancel
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md transition-colors"
+        >
+          Cancel
+        </button>
 
         <button
           type="button"
@@ -221,8 +208,8 @@ const UploadFlowComponent = ({ onUpload, onClose, isUploading, uploadError }) =>
           )}
         </button>
       </div>
-    </div>
+    </>
   );
 };
 
-export default UploadFlowComponent;
+export default UploadFlowForm;

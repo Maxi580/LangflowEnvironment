@@ -1,19 +1,133 @@
-import React from 'react';
-
-const FileManagementPanel = ({
-  serverStatus,
-  flowId,
-  files,
-  isFilesLoading,
-  filesError,
-  isUploading,
-  models,
-  fileInputRef,
-  handleFileUpload,
-  fetchFiles,
-  handleDeleteFile,
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  getServerStatus,
+  getModels,
+  getFiles,
+  uploadFiles,
+  deleteFile,
   formatFileSize
-}) => {
+} from '../services/FileService';
+
+const FileManagementPanel = ({ flowId }) => {
+  // Component state
+  const [serverStatus, setServerStatus] = useState({
+    ollama_connected: false,
+    qdrant_connected: false
+  });
+  const [files, setFiles] = useState([]);
+  const [isFilesLoading, setIsFilesLoading] = useState(false);
+  const [filesError, setFilesError] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [models, setModels] = useState([]);
+
+  const fileInputRef = useRef(null);
+
+  // Check server status and fetch models on component mount
+  useEffect(() => {
+    fetchServerStatus();
+    fetchModels();
+  }, []);
+
+  // Re-check server status and fetch files when flowId changes
+  useEffect(() => {
+    if (flowId) {
+      fetchServerStatus();
+      fetchFiles();
+    } else {
+      // If no flow ID, clear the files list
+      setFiles([]);
+    }
+  }, [flowId]);
+
+  // Function to fetch server status
+  const fetchServerStatus = async () => {
+    try {
+      const status = await getServerStatus(flowId);
+      setServerStatus(status);
+    } catch (err) {
+      console.error("Failed to fetch server status:", err);
+      // Don't set error state here as it's not critical for UI
+    }
+  };
+
+  // Function to fetch available models
+  const fetchModels = async () => {
+    try {
+      const modelsList = await getModels();
+      setModels(modelsList);
+    } catch (err) {
+      console.error("Failed to fetch models:", err);
+      // Don't set error state here as it's not critical for UI
+    }
+  };
+
+  // Function to fetch all files
+  const fetchFiles = async () => {
+    if (!flowId) return;
+
+    setIsFilesLoading(true);
+    setFilesError(null);
+
+    try {
+      const filesList = await getFiles(flowId);
+      setFiles(filesList);
+    } catch (err) {
+      console.error("Failed to fetch files:", err);
+      setFilesError(err.message);
+    } finally {
+      setIsFilesLoading(false);
+    }
+  };
+
+  // Function to handle file upload
+  const handleFileUpload = async (event) => {
+    const filesToUpload = event.target.files;
+    if (!filesToUpload.length) return;
+
+    // Check if flow ID is available
+    if (!flowId) {
+      setFilesError("No Flow ID set. Please select a flow before uploading files.");
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      await uploadFiles(filesToUpload, flowId);
+
+      // Refresh file list after upload
+      fetchFiles();
+    } catch (err) {
+      console.error('Error uploading files:', err);
+      setFilesError(`Failed to upload files: ${err.message}`);
+    } finally {
+      setIsUploading(false);
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Function to delete a file
+  const handleDeleteFile = async (filePath) => {
+    if (!flowId) {
+      setFilesError("No Flow ID set. Please select a flow before deleting files.");
+      return;
+    }
+
+    try {
+      await deleteFile(filePath, flowId);
+
+      // Refresh file list after deletion
+      fetchFiles();
+    } catch (err) {
+      console.error('Error deleting file:', err);
+      setFilesError(`Failed to delete file: ${err.message}`);
+    }
+  };
+
   return (
     <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-lg mb-6">
       <div className="flex justify-between items-center mb-4">
