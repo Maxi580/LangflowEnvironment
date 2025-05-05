@@ -1,13 +1,16 @@
 #!/bin/bash
 set -e
 
+OLLAMA_HOST=${OLLAMA_HOST:-0.0.0.0}
+OLLAMA_PORT=${OLLAMA_PORT:-11434}
+
 ollama serve &
 OLLAMA_PID=$!
 
-echo "Waiting for Ollama to start..."
+echo "Waiting for Ollama to start on ${OLLAMA_HOST}:${OLLAMA_PORT}..."
 
 for i in $(seq 1 30); do
-  if curl -s http://localhost:11434/api/tags > /dev/null; then
+  if curl -s http://${OLLAMA_HOST}:${OLLAMA_PORT}/api/tags > /dev/null; then
     echo "Ollama is ready!"
     break
   fi

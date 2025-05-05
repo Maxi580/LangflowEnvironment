@@ -5,39 +5,45 @@ services:
     build:
       context: ./ollama
       dockerfile: Dockerfile
-    container_name: ollama
-    hostname: ollama.local
+    container_name: ${OLLAMA_CONTAINER_NAME}
+    hostname: ${OLLAMA_HOST}
     ports:
-      - "11434:11434"
+      - "${OLLAMA_PORT}:${OLLAMA_PORT}"
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
     networks:
       - langflow-network
-    env_file:
-      - ./ollama/.env
+    environment:
+      - OLLAMA_HOST=${OLLAMA_HOST}
+      - OLLAMA_PORT=${OLLAMA_PORT}
+      - OLLAMA_MODELS=${OLLAMA_MODELS}
+      - OLLAMA_ALLOW_DOWNLOAD=${OLLAMA_ALLOW_DOWNLOAD}
+      - OLLAMA_ALLOW_UPLOAD=${OLLAMA_ALLOW_UPLOAD}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test: ["CMD", "curl", "-f", "http://localhost:${OLLAMA_PORT}/api/tags"]
       interval: 30s
       timeout: 10s
       retries: 3
 
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: qdrant
-    hostname: qdrant.local
+    container_name: ${QDRANT_CONTAINER_NAME}
+    hostname: ${QDRANT_HOST}
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "${QDRANT_PORT}:${QDRANT_PORT}"
+      - "${QDRANT_INTERNAL_PORT}:${QDRANT_INTERNAL_PORT}"
     volumes:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
     networks:
       - langflow-network
     environment:
-      - QDRANT_ALLOW_CORS=true
+      - QDRANT_ALLOW_CORS=${QDRANT_ALLOW_CORS}
+      - QDRANT_TELEMETRY_DISABLED=${QDRANT_TELEMETRY_DISABLED}
+      - QDRANT_LOG_LEVEL=${QDRANT_LOG_LEVEL}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:${QDRANT_PORT}/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -46,25 +52,32 @@ services:
     build:
       context: ./langflow
       dockerfile: Dockerfile
-    container_name: langflow
-    hostname: langflow.local
+    container_name: ${LANGFLOW_CONTAINER_NAME}
+    hostname: ${LANGFLOW_HOST}
     ports:
-      - "7860:7860"
+      - "${LANGFLOW_PORT}:${LANGFLOW_PORT}"
     volumes:
       - langflow_data:/root/.langflow
     restart: unless-stopped
     networks:
       - langflow-network
     environment:
-      - LANGFLOW_HOST=0.0.0.0
-      - LANGFLOW_PORT=7860
+      - LANGFLOW_HOST=${LANGFLOW_HOST}
+      - LANGFLOW_PORT=${LANGFLOW_PORT}
+      - LANGFLOW_AUTO_RELOAD=${LANGFLOW_AUTO_RELOAD}
+      - LANGFLOW_DEV=${LANGFLOW_DEV}
+      - LANGFLOW_DATABASE_URL=${LANGFLOW_DATABASE_URL}
+      - LANGFLOW_CACHE=${LANGFLOW_CACHE}
+      - LANGFLOW_EMBEDDING_MODEL_ENDPOINT=${OLLAMA_INTERNAL_URL}
+      - LANGFLOW_ALLOWED_ORIGINS=${LANGFLOW_ALLOWED_ORIGINS}
+      - LANGFLOW_REMOVE_EXAMPLE_FLOWS=${LANGFLOW_REMOVE_EXAMPLE_FLOWS}
     depends_on:
       - ollama
       - qdrant
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:7860/health" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:${LANGFLOW_PORT}/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -73,22 +86,32 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: backend
-    hostname: backend.local
+    container_name: ${BACKEND_CONTAINER_NAME}
+    hostname: ${BACKEND_HOST}
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
     volumes:
-      - backend_data:/app/uploads
+      - backend_data:${BACKEND_UPLOAD_DIR}
     restart: unless-stopped
     networks:
       - langflow-network
-    env_file:
-      - ./backend/.env
+    environment:
+      - SERVER_HOST=${BACKEND_HOST}
+      - SERVER_PORT=${BACKEND_PORT}
+      - EXTERNAL_LANGFLOW_URL=${EXTERNAL_LANGFLOW_URL}
+      - EXTERNAL_OLLAMA_URL=${EXTERNAL_OLLAMA_URL}
+      - EXTERNAL_QDRANT_URL=${EXTERNAL_QDRANT_URL}
+      - INTERNAL_OLLAMA_URL=${OLLAMA_INTERNAL_URL}
+      - INTERNAL_QDRANT_URL=${QDRANT_INTERNAL_URL}
+      - BACKEND_LOG_LEVEL=${BACKEND_LOG_LEVEL}
+      - BACKEND_ALLOW_ORIGINS=${BACKEND_ALLOW_ORIGINS}
+      - BACKEND_MAX_FILE_SIZE=${BACKEND_MAX_FILE_SIZE}
+      - BACKEND_DEFAULT_EMBEDDING_MODEL=${BACKEND_DEFAULT_EMBEDDING_MODEL}
     depends_on:
       - ollama
       - qdrant
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -97,20 +120,27 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: frontend
+    container_name: ${FRONTEND_CONTAINER_NAME}
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     volumes:
       - ./frontend:/app
       - /app/node_modules
     environment:
-      - REACT_APP_LANGFLOW_API=http://localhost:7860
-      - REACT_APP_BACKEND_API=http://localhost:8000
-      - NODE_ENV=development
-      - WDS_SOCKET_HOST=0.0.0.0
-      - CHOKIDAR_USEPOLLING=true
+      - REACT_APP_LANGFLOW_API=${REACT_APP_LANGFLOW_API}
+      - REACT_APP_BACKEND_API=${REACT_APP_BACKEND_API}
+      - NODE_ENV=${NODE_ENV}
+      - WDS_SOCKET_HOST=${WDS_SOCKET_HOST}
+      - CHOKIDAR_USEPOLLING=${CHOKIDAR_USEPOLLING}
+      - FAST_REFRESH=${FAST_REFRESH}
+      - BROWSER=${BROWSER}
+      - REACT_APP_VERSION=${REACT_APP_VERSION}
+      - REACT_APP_DEFAULT_FLOW_ID=${REACT_APP_DEFAULT_FLOW_ID}
     networks:
       - langflow-network
+    depends_on:
+      - backend
+      - langflow
 
 volumes:
   ollama_data:

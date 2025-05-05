@@ -1,10 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import config from '../config';
 import FlowManagement from './components/FlowManagement';
 import ChatManagement from './components/ChatManagement';
+import FileManagement from './components/FileManagement';
 
 function Interface() {
-  // State management
   const [flowId, setFlowId] = useState(() => {
     // Try to get flowId from localStorage, or use default from config
     return localStorage.getItem('langflow_flowId') || config.defaultFlowId;
@@ -12,23 +12,10 @@ function Interface() {
 
   const [messages, setMessages] = useState([]);
   const [showFlowSelector, setShowFlowSelector] = useState(false);
-
-  // Refs
-  const messagesEndRef = useRef(null);
-  const inputRef = useRef(null);
-
-  // Scroll to bottom of chat when messages update
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  // Focus input when component loads
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  const [files, setFiles] = useState([]);
 
   return (
-    <div className="flex w-full flex-col md:flex-row gap-6">
+    <div className="flex w-full flex-col md:flex-row gap-6 p-4">
       {/* Main content area */}
       <div className="flex-1 flex flex-col">
         {/* Flow Management component */}
@@ -44,6 +31,15 @@ function Interface() {
           messages={messages}
           setMessages={setMessages}
           setShowFlowSelector={setShowFlowSelector}
+          files={files}
+        />
+      </div>
+
+      {/* Files column */}
+      <div className="md:w-80 flex-shrink-0">
+        <FileManagement
+          flowId={flowId}
+          setMessages={setMessages}
         />
       </div>
     </div>

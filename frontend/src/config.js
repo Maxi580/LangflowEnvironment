@@ -1,9 +1,9 @@
 const config = {
-  defaultFlowId: '',
+  defaultFlowId: process.env.REACT_APP_DEFAULT_FLOW_ID || '',
 
   api: {
-    baseUrl: 'http://localhost:7860',
-    fileServerUrl: 'http://localhost:8000',
+    langflowUrl: process.env.REACT_APP_LANGFLOW_API || 'http://localhost:7860',
+    fileServerUrl: process.env.REACT_APP_BACKEND_API || 'http://localhost:8000',
 
     version: 'v1',
 
@@ -20,19 +20,19 @@ const config = {
     },
 
     getRunUrl: function(flowId) {
-      return `${this.baseUrl}/api/${this.version}/${this.endpoints.run}/${flowId}`;
+      return `${this.langflowUrl}/api/${this.version}/${this.endpoints.run}/${flowId}`;
     },
 
     getFlowsUrl: function() {
-      return `${this.baseUrl}/api/${this.version}/${this.endpoints.flows}/`;
+      return `${this.langflowUrl}/api/${this.version}/${this.endpoints.flows}/`;
     },
 
     getFlowUploadUrl: function() {
-      return `${this.baseUrl}/api/${this.version}/${this.endpoints.uploadFlow}/`;
+      return `${this.langflowUrl}/api/${this.version}/${this.endpoints.uploadFlow}/`;
     },
 
     getFlowDeleteUrl: function(flowId) {
-      return `${this.baseUrl}/api/${this.version}/${this.endpoints.flows}/${flowId}`;
+      return `${this.langflowUrl}/api/${this.version}/${this.endpoints.flows}/${flowId}`;
     },
 
     getFilesUrl: function() {

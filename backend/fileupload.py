@@ -8,9 +8,6 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 import PyPDF2
 import mimetypes
-from dotenv import load_dotenv
-
-load_dotenv()
 
 OLLAMA_URL = os.getenv("INTERNAL_OLLAMA_URL", "http://ollama:11434")
 QDRANT_URL = os.getenv("INTERNAL_QDRANT_URL", "http://qdrant:6333")

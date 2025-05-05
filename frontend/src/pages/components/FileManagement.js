@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  getServerStatus,
-  getModels,
-  getFiles,
-  uploadFiles,
-  deleteFile,
-  formatFileSize
-} from '../services/FileService';
+import fileService from '../services/FileService';
+import messageService from '../services/MessageService';
 
-const FileManagementPanel = ({ flowId }) => {
+/**
+ * FileManagement component that handles all file-related functionality
+ * including uploading, listing, and deleting files
+ */
+const FileManagement = ({
+  flowId,
+  setMessages
+}) => {
   // Component state
   const [serverStatus, setServerStatus] = useState({
     ollama_connected: false,
@@ -20,6 +21,7 @@ const FileManagementPanel = ({ flowId }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [models, setModels] = useState([]);
 
+  // Refs
   const fileInputRef = useRef(null);
 
   // Check server status and fetch models on component mount
@@ -39,10 +41,12 @@ const FileManagementPanel = ({ flowId }) => {
     }
   }, [flowId]);
 
-  // Function to fetch server status
+  /**
+   * Fetches server status
+   */
   const fetchServerStatus = async () => {
     try {
-      const status = await getServerStatus(flowId);
+      const status = await fileService.checkServerStatus(flowId);
       setServerStatus(status);
     } catch (err) {
       console.error("Failed to fetch server status:", err);
@@ -50,10 +54,12 @@ const FileManagementPanel = ({ flowId }) => {
     }
   };
 
-  // Function to fetch available models
+  /**
+   * Fetches available embedding models
+   */
   const fetchModels = async () => {
     try {
-      const modelsList = await getModels();
+      const modelsList = await fileService.getEmbeddingModels();
       setModels(modelsList);
     } catch (err) {
       console.error("Failed to fetch models:", err);
@@ -61,7 +67,9 @@ const FileManagementPanel = ({ flowId }) => {
     }
   };
 
-  // Function to fetch all files
+  /**
+   * Fetches files for the current flowId
+   */
   const fetchFiles = async () => {
     if (!flowId) return;
 
@@ -69,7 +77,7 @@ const FileManagementPanel = ({ flowId }) => {
     setFilesError(null);
 
     try {
-      const filesList = await getFiles(flowId);
+      const filesList = await fileService.fetchFiles(flowId);
       setFiles(filesList);
     } catch (err) {
       console.error("Failed to fetch files:", err);
@@ -79,7 +87,9 @@ const FileManagementPanel = ({ flowId }) => {
     }
   };
 
-  // Function to handle file upload
+  /**
+   * Handles file upload
+   */
   const handleFileUpload = async (event) => {
     const filesToUpload = event.target.files;
     if (!filesToUpload.length) return;
@@ -93,13 +103,28 @@ const FileManagementPanel = ({ flowId }) => {
     setIsUploading(true);
 
     try {
-      await uploadFiles(filesToUpload, flowId);
+      await fileService.uploadFiles(filesToUpload, flowId);
 
       // Refresh file list after upload
       fetchFiles();
+
+      // Add a system message about uploaded files
+      const fileNames = Array.from(filesToUpload).map(f => f.name).join(', ');
+      const message = messageService.createSystemMessage(
+        `Files uploaded: ${fileNames} (stored in collection: ${flowId})`
+      );
+      setMessages && setMessages(prev => [...prev, message]);
     } catch (err) {
       console.error('Error uploading files:', err);
       setFilesError(`Failed to upload files: ${err.message}`);
+
+      // Add error message to chat if message service is available
+      if (setMessages) {
+        const errorMessage = messageService.createErrorMessage(
+          `Error uploading files: ${err.message}`
+        );
+        setMessages(prev => [...prev, errorMessage]);
+      }
     } finally {
       setIsUploading(false);
 
@@ -110,7 +135,9 @@ const FileManagementPanel = ({ flowId }) => {
     }
   };
 
-  // Function to delete a file
+  /**
+   * Handles file deletion
+   */
   const handleDeleteFile = async (filePath) => {
     if (!flowId) {
       setFilesError("No Flow ID set. Please select a flow before deleting files.");
@@ -118,13 +145,30 @@ const FileManagementPanel = ({ flowId }) => {
     }
 
     try {
-      await deleteFile(filePath, flowId);
+      await fileService.deleteFile(filePath, flowId);
 
       // Refresh file list after deletion
       fetchFiles();
+
+      // Add a system message about deleted file
+      if (setMessages) {
+        const fileName = filePath.split('/').pop().split('-').slice(1).join('-');
+        const message = messageService.createSystemMessage(
+          `File deleted: ${fileName} (from collection: ${flowId})`
+        );
+        setMessages(prev => [...prev, message]);
+      }
     } catch (err) {
       console.error('Error deleting file:', err);
       setFilesError(`Failed to delete file: ${err.message}`);
+
+      // Add error message to chat if message service is available
+      if (setMessages) {
+        const errorMessage = messageService.createErrorMessage(
+          `Error deleting file: ${err.message}`
+        );
+        setMessages(prev => [...prev, errorMessage]);
+      }
     }
   };
 
@@ -237,7 +281,7 @@ const FileManagementPanel = ({ flowId }) => {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-white truncate">{file.file_name}</div>
                   <div className="text-xs text-slate-400 mt-1">
-                    {formatFileSize(file.file_size)} • {file.file_type.toUpperCase()}
+                    {fileService.formatFileSize(file.file_size)} • {file.file_type.toUpperCase()}
                   </div>
                 </div>
               </div>
@@ -273,4 +317,4 @@ const FileManagementPanel = ({ flowId }) => {
   );
 };
 
-export default FileManagementPanel;
+export default FileManagement;

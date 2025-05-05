@@ -12,9 +12,8 @@ const FlowManagement = ({
   flowId,
   setFlowId,
   setMessages,
-  children // Optional children to render inside component
+  children
 }) => {
-  // State for flow management
   const [showFlowSelector, setShowFlowSelector] = useState(false);
   const [showUploadFlow, setShowUploadFlow] = useState(false);
   const [isUploadingFlow, setIsUploadingFlow] = useState(false);
@@ -23,17 +22,14 @@ const FlowManagement = ({
   const [flowsLoading, setFlowsLoading] = useState(false);
   const [flowsError, setFlowsError] = useState(null);
 
-  // Refs
   const flowFileInputRef = useRef(null);
 
-  // Fetch flows when flow selector is opened
   useEffect(() => {
     if (showFlowSelector) {
       handleFetchFlows();
     }
   }, [showFlowSelector]);
 
-  // Save flowId to localStorage when it changes
   useEffect(() => {
     if (flowId) {
       localStorage.setItem('langflow_flowId', flowId);
@@ -88,10 +84,8 @@ const FlowManagement = ({
     try {
       await flowService.deleteFlow(flowToDelete.id);
 
-      // Refresh flows list
       handleFetchFlows();
 
-      // If the deleted flow was the current one, reset flowId
       if (flowToDelete.id === flowId) {
         setFlowId('');
 
@@ -100,7 +94,6 @@ const FlowManagement = ({
         );
         setMessages(prev => [...prev, message]);
       } else {
-        // Just notify about deletion
         const message = messageService.createSystemMessage(
           `Flow "${flowToDelete.name}" was deleted.`
         );
@@ -124,7 +117,6 @@ const FlowManagement = ({
    * @param {string} error - Error message if validation failed
    */
   const handleFlowUpload = async (file, flowName, flowDescription, error = null) => {
-    // Handle validation errors from the component
     if (error) {
       setUploadFlowError(error);
       return;
@@ -139,10 +131,8 @@ const FlowManagement = ({
     setUploadFlowError(null);
 
     try {
-      // Read and parse the flow file
       const flowData = await flowService.readFlowFile(file);
 
-      // Only add name and description if provided by the user
       if (flowName && flowName.trim()) {
         flowData.name = flowName;
       }
@@ -150,14 +140,11 @@ const FlowManagement = ({
       if (flowDescription && flowDescription.trim()) {
         flowData.description = flowDescription;
       } else if (!flowData.description) {
-        // Set an empty description if none exists
         flowData.description = '';
       }
 
-      // Upload the flow
       const result = await flowService.uploadFlow(flowData);
 
-      // Add newly uploaded flow to flows list if not already there
       setFlows(prevFlows => {
         if (prevFlows.some(flow => flow.id === result.id)) {
           return prevFlows.map(flow =>
@@ -168,13 +155,11 @@ const FlowManagement = ({
         }
       });
 
-      // Show confirmation message
       const message = messageService.createSystemMessage(
         `Flow "${result.name}" was successfully uploaded.`
       );
       setMessages(prev => [...prev, message]);
 
-      // Close the upload dialog
       setShowUploadFlow(false);
     } catch (err) {
       console.error('Error uploading flow:', err);
@@ -243,7 +228,7 @@ const FlowManagement = ({
    * Opens LangFlow in a new window
    */
   const handleOpenLangFlow = () => {
-    const langFlowUrl = `${config.api.baseUrl}/flows`;
+    const langFlowUrl = `${config.api.langflowUrl}/flows`;
     window.open(langFlowUrl, '_blank', 'noopener,noreferrer');
   };
 
