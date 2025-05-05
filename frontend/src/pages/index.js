@@ -10,6 +10,7 @@ import FlowSelector from './components/FlowSelector';
 import FileManagementPanel from './components/FileManagementPanel';
 import ChatContainer from './components/ChatContainer';
 import UploadFlowComponent from './components/UploadFlowComponent';
+import LangFlowRedirectButton from './components/LangFlowRedirectButton';
 
 function Prompt() {
   const [flowId, setFlowId] = useState(() => {
@@ -549,8 +550,9 @@ function Prompt() {
       <div className="flex-1 flex flex-col">
         {/* Flow Selector and Upload Flow buttons */}
         <div className="flex justify-end mb-4 space-x-2">
+          <LangFlowRedirectButton />
           <button
-            onClick={() => setShowUploadFlow(true)}
+            onClick={() => setShowUploadFlow(!showUploadFlow)}
             className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700
                      text-white rounded-lg text-sm transition-colors"
           >
