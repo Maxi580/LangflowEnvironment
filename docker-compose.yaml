@@ -1,52 +1,42 @@
 version: '3'
 
 services:
-  ollama:
-    build:
-      context: ./ollama
-      dockerfile: Dockerfile
-    container_name: ${OLLAMA_CONTAINER_NAME}
-    hostname: ${OLLAMA_HOST}
-    ports:
-      - "${OLLAMA_PORT}:${OLLAMA_PORT}"
-    volumes:
-      - ollama_data:/root/.ollama
+  postgres:
+    image: postgres:15-alpine
+    container_name: ${POSTGRES_CONTAINER_NAME}
+    hostname: ${POSTGRES_HOST}
     restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - langflow-network
-    environment:
-      - OLLAMA_HOST=${OLLAMA_HOST}
-      - OLLAMA_PORT=${OLLAMA_PORT}
-      - OLLAMA_MODELS=${OLLAMA_MODELS}
-      - OLLAMA_ALLOW_DOWNLOAD=${OLLAMA_ALLOW_DOWNLOAD}
-      - OLLAMA_ALLOW_UPLOAD=${OLLAMA_ALLOW_UPLOAD}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${OLLAMA_PORT}/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-langflow} -d ${POSTGRES_DB:-langflow} -h localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
-  qdrant:
-    image: qdrant/qdrant:latest
-    container_name: ${QDRANT_CONTAINER_NAME}
-    hostname: ${QDRANT_HOST}
-    ports:
-      - "${QDRANT_PORT}:${QDRANT_PORT}"
-      - "${QDRANT_INTERNAL_PORT}:${QDRANT_INTERNAL_PORT}"
-    volumes:
-      - qdrant_data:/qdrant/storage
+  adminer:
+    image: adminer
+    container_name: adminer
     restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres
+      - ADMINER_DESIGN=flat
     networks:
       - langflow-network
-    environment:
-      - QDRANT_ALLOW_CORS=${QDRANT_ALLOW_CORS}
-      - QDRANT_TELEMETRY_DISABLED=${QDRANT_TELEMETRY_DISABLED}
-      - QDRANT_LOG_LEVEL=${QDRANT_LOG_LEVEL}
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${QDRANT_PORT}/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    depends_on:
+      - postgres
 
   langflow:
     build:
@@ -68,12 +58,29 @@ services:
       - LANGFLOW_DEV=${LANGFLOW_DEV}
       - LANGFLOW_DATABASE_URL=${LANGFLOW_DATABASE_URL}
       - LANGFLOW_CACHE=${LANGFLOW_CACHE}
-      - LANGFLOW_EMBEDDING_MODEL_ENDPOINT=${OLLAMA_INTERNAL_URL}
       - LANGFLOW_ALLOWED_ORIGINS=${LANGFLOW_ALLOWED_ORIGINS}
       - LANGFLOW_REMOVE_EXAMPLE_FLOWS=${LANGFLOW_REMOVE_EXAMPLE_FLOWS}
+      - LANGFLOW_SUPERUSER=${LANGFLOW_SUPERUSER}
+      - LANGFLOW_SUPERUSER_USERNAME=${LANGFLOW_SUPERUSER_USERNAME}
+      - LANGFLOW_SUPERUSER_PASSWORD=${LANGFLOW_SUPERUSER_PASSWORD}
+      - LANGFLOW_SECRET_KEY=${LANGFLOW_SECRET_KEY}
+      - LANGFLOW_AUTO_LOGIN=${LANGFLOW_AUTO_LOGIN}
+      - LANGFLOW_AUTO_APPROVE_USERS=${LANGFLOW_AUTO_APPROVE_USERS}
+      - LANGFLOW_DISABLE_TOKEN_GENERATION=${LANGFLOW_DISABLE_TOKEN_GENERATION}
+      - LANGFLOW_ALLOW_USER_REGISTRATION=${LANGFLOW_ALLOW_USER_REGISTRATION}
+      - DO_NOT_TRACK=${DO_NOT_TRACK}
+      - LANGFLOW_STORE_ENVIRONMENT_VARIABLES=${LANGFLOW_STORE_ENVIRONMENT_VARIABLES}
+      - LANGFLOW_AUTO_MIGRATE=true
+      - PGHOST=${PGHOST}
+      - PGHOSTADDR=${PGHOSTADDR}
+      - PGPORT=${PGPORT}
+      - PGSSLMODE=${PGSSLMODE}
+      - PG_COLOR=${PG_COLOR}
+      - PGCONNECT_TIMEOUT=${PGCONNECT_TIMEOUT}
+      - PGCLIENTENCODING=${PGCLIENTENCODING}
     depends_on:
-      - ollama
-      - qdrant
+      postgres:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -99,17 +106,9 @@ services:
       - SERVER_HOST=${BACKEND_HOST}
       - SERVER_PORT=${BACKEND_PORT}
       - EXTERNAL_LANGFLOW_URL=${EXTERNAL_LANGFLOW_URL}
-      - EXTERNAL_OLLAMA_URL=${EXTERNAL_OLLAMA_URL}
-      - EXTERNAL_QDRANT_URL=${EXTERNAL_QDRANT_URL}
-      - INTERNAL_OLLAMA_URL=${OLLAMA_INTERNAL_URL}
-      - INTERNAL_QDRANT_URL=${QDRANT_INTERNAL_URL}
       - BACKEND_LOG_LEVEL=${BACKEND_LOG_LEVEL}
       - BACKEND_ALLOW_ORIGINS=${BACKEND_ALLOW_ORIGINS}
       - BACKEND_MAX_FILE_SIZE=${BACKEND_MAX_FILE_SIZE}
-      - BACKEND_DEFAULT_EMBEDDING_MODEL=${BACKEND_DEFAULT_EMBEDDING_MODEL}
-    depends_on:
-      - ollama
-      - qdrant
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/health" ]
       interval: 30s
@@ -143,10 +142,9 @@ services:
       - langflow
 
 volumes:
-  ollama_data:
-  qdrant_data:
   langflow_data:
   backend_data:
+  postgres_data:
 
 networks:
   langflow-network:
