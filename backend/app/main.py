@@ -1,10 +1,8 @@
-import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pathlib import Path
 from dotenv import load_dotenv
 
-from backend.app.api.routes.health import router as health_router
+from .api.routes.health import router as health_router
 
 load_dotenv()
 

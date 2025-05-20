@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from backend.app.api.utils.fileupload import check_qdrant_connection, check_ollama_connection
+from ..utils.fileupload import check_qdrant_connection, check_ollama_connection
 from typing import Dict, Any
 import os
 
