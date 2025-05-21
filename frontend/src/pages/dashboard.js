@@ -4,7 +4,7 @@ import FlowManagement from './components/FlowManagement';
 import ChatManagement from './components/ChatManagement';
 import FileManagement from './components/FileManagement';
 
-function Interface() {
+function Dashboard() {
   const [flowId, setFlowId] = useState(() => {
     // Try to get flowId from localStorage, or use default from config
     return localStorage.getItem('langflow_flowId') || config.defaultFlowId;
@@ -46,4 +46,4 @@ function Interface() {
   );
 }
 
-export default Interface;
+export default Dashboard;

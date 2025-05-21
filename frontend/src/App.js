@@ -1,30 +1,60 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
-import Interface from './pages';
+import Dashboard from './pages/dashboard';
+import LoginPage from "./pages/login";
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  const handleLogin = (credentials) => {
+    console.log('Login attempted with:', credentials);
+    localStorage.setItem('auth_token', 'demo_token');
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('auth_token');
+    setIsAuthenticated(false);
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      <header className="py-4 px-6 border-b border-slate-700">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-white tracking-tight">
-              KI <span className="text-blue-400">Agenten</span> Assistent
-          </h1>
-        </div>
-      </header>
+    <Router>
+      <Routes>
+        {/* Root path shows login, redirects to dashboard if authenticated */}
+        <Route
+          path="/"
+          element={
+            isAuthenticated ?
+            <Navigate to="/dashboard" /> :
+            <LoginPage onLogin={handleLogin} />
+          }
+        />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-8">
-        <Interface />
-      </main>
+        {/* Protected dashboard route */}
+        <Route
+          path="/dashboard"
+          element={
+            isAuthenticated ?
+            <Dashboard onLogout={handleLogout} /> :
+            <Navigate to="/" />
+          }
+        />
 
-      <footer className="py-3 px-6 border-t border-slate-700">
-        <div className="max-w-7xl mx-auto">
-          <p className="text-center text-sm text-slate-400">
-            Powered by LangFlow, Qdrant & Ollama
-          </p>
-        </div>
-      </footer>
-    </div>
+        {/* Catch-all route redirects to root */}
+        <Route
+          path="*"
+          element={<Navigate to="/" />}
+        />
+      </Routes>
+    </Router>
   );
 }
 

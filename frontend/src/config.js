@@ -1,55 +1,38 @@
+const LANGFLOW_API = process.env.REACT_APP_LANGFLOW_API || 'http://localhost:7860';
+const BACKEND_API = process.env.REACT_APP_BACKEND_API || 'http://localhost:8000';
+const DEFAULT_FLOW_ID = process.env.REACT_APP_DEFAULT_FLOW_ID || '';
+const APP_VERSION = process.env.REACT_APP_VERSION || '1.0.0';
+
 const config = {
-  defaultFlowId: process.env.REACT_APP_DEFAULT_FLOW_ID || '',
-
+  // API Base URLs
   api: {
-    langflowUrl: process.env.REACT_APP_LANGFLOW_API || 'http://localhost:7860',
-    fileServerUrl: process.env.REACT_APP_BACKEND_API || 'http://localhost:8000',
+    langflowUrl: LANGFLOW_API,
+    backendUrl: BACKEND_API,
 
-    version: 'v1',
+    // LangFlow API Endpoints
+    getFlowsUrl: () => `${LANGFLOW_API}/api/v1/flows/`,
+    getFlowDeleteUrl: (flowId) => `${LANGFLOW_API}/api/v1/flows/${flowId}`,
+    getFlowUploadUrl: () => `${LANGFLOW_API}/api/v1/flows/`,
+    getRunUrl: (flowId) => `${LANGFLOW_API}/api/v1/run/${flowId}`,
+    getLangFlowLoginUrl: () => `${LANGFLOW_API}/api/v1/login`,
 
-    endpoints: {
-      run: 'run',
-      flows: 'flows',
-      importFlow: 'flows/import',
-      uploadFlow: 'flows/upload',
+    // Backend API Endpoints
+    getBackendUrl: () => BACKEND_API,
+    getFilesUrl: () => `${BACKEND_API}/api/files`,
+    getUploadUrl: () => `${BACKEND_API}/api/files/upload`,
+    getModelsUrl: () => `${BACKEND_API}/api/models`,
+    getStatusUrl: () => `${BACKEND_API}/api/health`,
+    getUsersUrl: () => `${BACKEND_API}/api/users`,
+    getUserDeleteUrl: (userId) => `${BACKEND_API}/api/users/${userId}`,
+  },
 
-      files: 'files',
-      uploadFile: 'upload',
-      models: 'models',
-      status: 'status'
-    },
+  defaultFlowId: DEFAULT_FLOW_ID,
+  version: APP_VERSION,
 
-    getRunUrl: function(flowId) {
-      return `${this.langflowUrl}/api/${this.version}/${this.endpoints.run}/${flowId}`;
-    },
-
-    getFlowsUrl: function() {
-      return `${this.langflowUrl}/api/${this.version}/${this.endpoints.flows}/`;
-    },
-
-    getFlowUploadUrl: function() {
-      return `${this.langflowUrl}/api/${this.version}/${this.endpoints.uploadFlow}/`;
-    },
-
-    getFlowDeleteUrl: function(flowId) {
-      return `${this.langflowUrl}/api/${this.version}/${this.endpoints.flows}/${flowId}`;
-    },
-
-    getFilesUrl: function() {
-      return `${this.fileServerUrl}/api/${this.endpoints.files}`;
-    },
-
-    getUploadUrl: function() {
-      return `${this.fileServerUrl}/api/${this.endpoints.uploadFile}`;
-    },
-
-    getModelsUrl: function() {
-      return `${this.fileServerUrl}/api/${this.endpoints.models}`;
-    },
-
-    getStatusUrl: function() {
-      return `${this.fileServerUrl}/api/${this.endpoints.status}`;
-    }
+  auth: {
+    tokenStorageKey: 'langflow_auth_token',
+    userStorageKey: 'langflow_auth',
+    sessionTimeout: 3600 * 24,
   }
 };
 
