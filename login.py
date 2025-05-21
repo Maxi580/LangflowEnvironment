@@ -8,8 +8,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 
 LANGFLOW_URL = "http://localhost:7860"
-USERNAME = "TestUser"
-PASSWORD = "TestUser"
+USERNAME = "admin"
+PASSWORD = "admin"
 
 
 def get_access_token():

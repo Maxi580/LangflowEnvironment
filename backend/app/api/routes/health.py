@@ -1,5 +1,6 @@
+from datetime import datetime
 from fastapi import APIRouter, HTTPException
-from ..utils.fileupload import check_qdrant_connection, check_ollama_connection
+from ..utils.connection import check_langflow_connection, check_qdrant_connection, check_ollama_connection
 from typing import Dict, Any
 import os
 
@@ -13,12 +14,17 @@ router = APIRouter(prefix="/api/health", tags=["health"])
 async def health_check() -> Dict[str, Any]:
     ollama_status = check_ollama_connection()
     qdrant_status = check_qdrant_connection()
+    langflow_status = check_langflow_connection()
+
+    all_healthy = ollama_status and qdrant_status and langflow_status
 
     return {
-        "status": "healthy" if ollama_status and qdrant_status else "degraded",
+        "status": "healthy" if all_healthy else "degraded",
+        "timestamp": datetime.utcnow().isoformat(),
         "services": {
             "ollama": "connected" if ollama_status else "disconnected",
             "qdrant": "connected" if qdrant_status else "disconnected",
+            "langflow": "connected" if langflow_status else "disconnected",
             "api": "running"
         },
         "version": "1.0.0"
@@ -42,3 +48,11 @@ async def check_qdrant() -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="Qdrant service is not available")
     return {"status": "connected", "service": "qdrant"}
 
+
+@router.get("/langflow")
+async def check_langflow() -> Dict[str, Any]:
+    """Check if Langflow service is running"""
+    is_connected = check_langflow_connection()
+    if not is_connected:
+        raise HTTPException(status_code=503, detail="Langflow service is not available")
+    return {"status": "connected", "service": "langflow"}
