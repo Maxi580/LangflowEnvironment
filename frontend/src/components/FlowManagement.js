@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import flowService from '../services/FlowService';
 import messageService from '../services/MessageService';
-import config from '../../config';
+import config from '../config';
 import UploadFlowForm from './UploadFlowForm';
 
 /**

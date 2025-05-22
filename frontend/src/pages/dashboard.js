@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import config from '../config';
-import FlowManagement from './components/FlowManagement';
-import ChatManagement from './components/ChatManagement';
-import FileManagement from './components/FileManagement';
+import FlowManagement from '../components/FlowManagement';
+import ChatManagement from '../components/ChatManagement';
+import FileManagement from '../components/FileManagement';
 
 function Dashboard() {
   const [flowId, setFlowId] = useState(() => {

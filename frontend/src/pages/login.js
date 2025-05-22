@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import userService from './services/UserService';
+import userService from '../services/UserService';
 
 const LoginPage = ({ onLogin }) => {
   const [username, setUsername] = useState('');
@@ -61,6 +61,43 @@ const LoginPage = ({ onLogin }) => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [currentPhrase, isDeleting, phraseIndex, phrases]);
+
+  const handleLogin = async () => {
+    if (!username || !password) {
+      setMessage({ type: 'error', text: 'Username and password are required' });
+      return;
+    }
+
+    setIsLoading(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      const result = await userService.login({ username, password });
+
+      if (result.success) {
+        setMessage({
+          type: 'success',
+          text: 'Login successful!'
+        });
+
+        // Call the parent component's onLogin function
+        onLogin(result);
+      } else {
+        setMessage({
+          type: 'error',
+          text: 'Login failed. Please check your credentials.'
+        });
+      }
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error.message || 'Login failed. Please try again.'
+      });
+      console.error('Login error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleRegister = async () => {
     if (!username || !password) {
@@ -157,13 +194,13 @@ const LoginPage = ({ onLogin }) => {
 
           <div className="flex flex-col space-y-3 mt-6">
             <button
-              onClick={() => onLogin({ username, password })}
+              onClick={handleLogin}
               disabled={isLoading}
               className="w-full px-4 py-3 bg-sky-500 text-white rounded-full font-medium
                         hover:bg-sky-600 transition-colors focus:outline-none focus:ring-2 focus:ring-sky-300
                         disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Login
+              {isLoading ? 'Logging in...' : 'Login'}
             </button>
 
             <button

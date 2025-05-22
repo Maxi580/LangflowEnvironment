@@ -1,4 +1,4 @@
-import config from '../../config';
+import config from '../config';
 
 /**
  * Service for managing LangFlow flows
