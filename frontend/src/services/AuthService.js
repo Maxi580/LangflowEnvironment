@@ -9,7 +9,6 @@ class AuthService {
     this.tokenKey = 'langflow_access_token';
     this.refreshTokenKey = 'langflow_refresh_token';
     this.apiKeyKey = 'langflow_api_key';
-    this.authMethodKey = 'langflow_auth_method';
 
     this.refreshTimer = null;
     this.isRefreshing = false;
@@ -26,13 +25,9 @@ class AuthService {
    * @private
    */
   _initializeSilentRefresh() {
-    const authMethod = localStorage.getItem(this.authMethodKey) || 'jwt';
-
-    if (authMethod === 'jwt') {
       const token = localStorage.getItem(this.tokenKey);
       if (token && this._isValidJWTFormat(token) && !this._isTokenExpired(token)) {
         this._scheduleNextRefresh(token);
-      }
     }
   }
 
@@ -100,7 +95,8 @@ class AuthService {
     const expiration = this._getTokenExpiration(token);
     if (!expiration) return;
 
-    const refreshTime = Math.max(0, expiration - this.REFRESH_BUFFER - Date.now());
+    //Zconst refreshTime = Math.max(0, expiration - this.REFRESH_BUFFER - Date.now());
+    const refreshTime = 10000
 
     if (refreshTime <= 0) {
       console.log('🔄 Token expires soon, attempting refresh...');
@@ -150,12 +146,12 @@ class AuthService {
         console.log('🔄 Attempting silent token refresh...');
 
         // Strategy 1: Try to validate token - maybe it's still valid
-        const isStillValid = await this._validateTokenWithLangFlow(currentToken);
+        /*const isStillValid = await this._validateTokenWithLangFlow(currentToken);
         if (isStillValid) {
           console.log('✅ Token is still valid, no refresh needed');
           this._scheduleNextRefresh(currentToken);
           return currentToken;
-        }
+        }*/
 
         // Strategy 2: Try session-based refresh (cookies)
         let newToken = await this._trySessionBasedRefresh();
@@ -199,33 +195,25 @@ class AuthService {
    */
   async _validateTokenWithLangFlow(token) {
     try {
-      // Try different possible validation endpoints
-      const possibleEndpoints = [
-        `${config.api.langflowUrl}/api/v1/users/whoami`,
-        `${config.api.langflowUrl}/api/v1/auth/me`,
-        `${config.api.langflowUrl}/api/v1/user/profile`,
-        `${config.api.langflowUrl}/health` // Fallback - some endpoints don't need auth
-      ];
+      const endpoint = `${config.api.langflowUrl}/api/v1/users/whoami`;
 
-      for (const endpoint of possibleEndpoints) {
-        try {
-          const response = await fetch(endpoint, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            credentials: 'include'
-          });
+      try {
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        });
 
-          if (response.ok) {
-            return true;
-          }
-        } catch (err) {
-          continue;
+        if (response.ok) {
+          return true;
         }
+      } catch (err) {
       }
+
 
       return false;
     } catch (error) {
@@ -233,44 +221,6 @@ class AuthService {
     }
   }
 
-  /**
-   * Attempts session-based refresh using cookies
-   * @returns {Promise<string|null>} - New token or null
-   * @private
-   */
-  async _trySessionBasedRefresh() {
-    try {
-      // LangFlow might support getting a new token via session cookies
-      const possibleEndpoints = [
-        `${config.api.langflowUrl}/api/v1/auth/token`,
-        `${config.api.langflowUrl}/api/v1/token`,
-        `${config.api.langflowUrl}/api/v1/auth/refresh-session`
-      ];
-
-      for (const endpoint of possibleEndpoints) {
-        try {
-          const response = await fetch(endpoint, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json'
-            },
-            credentials: 'include' // Include cookies for session-based auth
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            return data.access_token || data.token || null;
-          }
-        } catch (err) {
-          continue;
-        }
-      }
-
-      return null;
-    } catch (error) {
-      return null;
-    }
-  }
 
   /**
    * Updates the stored token
@@ -279,7 +229,6 @@ class AuthService {
    */
   _updateToken(newToken) {
     localStorage.setItem(this.tokenKey, newToken);
-    localStorage.setItem(this.authMethodKey, 'jwt');
   }
 
   /**
@@ -302,7 +251,6 @@ class AuthService {
     localStorage.removeItem(this.tokenKey);
     localStorage.removeItem(this.refreshTokenKey);
     localStorage.removeItem(this.apiKeyKey);
-    localStorage.removeItem(this.authMethodKey);
     this._clearRefreshTimer();
   }
 
@@ -329,16 +277,6 @@ class AuthService {
    */
   async isAuthenticated() {
     try {
-      const authMethod = localStorage.getItem(this.authMethodKey) || 'jwt';
-
-      if (authMethod === 'apikey') {
-        // API keys don't expire, just validate
-        const apiKey = localStorage.getItem(this.apiKeyKey);
-        if (!apiKey) return false;
-        return await this._validateWithAPIKey(apiKey);
-      }
-
-      // JWT token handling
       const token = localStorage.getItem(this.tokenKey);
       if (!token) return false;
 
@@ -376,28 +314,6 @@ class AuthService {
   }
 
   /**
-   * Validates API key with server
-   * @param {string} apiKey - API key to validate
-   * @returns {Promise<boolean>} - True if valid
-   * @private
-   */
-  async _validateWithAPIKey(apiKey) {
-    try {
-      const response = await fetch(`${config.api.langflowUrl}/api/v1/users/whoami`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'x-api-key': apiKey,
-          'Content-Type': 'application/json'
-        }
-      });
-      return response.ok;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  /**
    * Sets a new JWT token and starts silent refresh
    * @param {string} token - JWT token to set
    * @param {string} refreshToken - Optional refresh token
@@ -420,25 +336,6 @@ class AuthService {
     this._notifyAuthEvent({ type: 'TOKEN_UPDATED', token });
   }
 
-  /**
-   * Sets an API key for authentication
-   * @param {string} apiKey - API key to set
-   */
-  setApiKey(apiKey) {
-    if (!apiKey || typeof apiKey !== 'string') {
-      throw new Error('Invalid API key provided');
-    }
-
-    console.log('🗝️ Setting API key');
-    localStorage.setItem(this.apiKeyKey, apiKey);
-    localStorage.setItem(this.authMethodKey, 'apikey');
-
-    // Clear any JWT refresh timer since API keys don't expire
-    this._clearRefreshTimer();
-
-    // Notify listeners
-    this._notifyAuthEvent({ type: 'APIKEY_UPDATED', apiKey });
-  }
 
   /**
    * Clears all authentication data
@@ -461,23 +358,15 @@ class AuthService {
       throw new Error('Authentication required');
     }
 
-    const authMethod = localStorage.getItem(this.authMethodKey) || 'jwt';
     const headers = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
       ...options.headers
     };
 
-    if (authMethod === 'jwt') {
-      const token = localStorage.getItem(this.tokenKey);
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-    } else if (authMethod === 'apikey') {
-      const apiKey = localStorage.getItem(this.apiKeyKey);
-      if (apiKey) {
-        headers['x-api-key'] = apiKey;
-      }
+    const token = localStorage.getItem(this.tokenKey);
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
 
     return fetch(url, {
@@ -508,12 +397,6 @@ class AuthService {
    * @returns {number|null} - Milliseconds until expiry or null
    */
   getTimeUntilExpiry() {
-    const authMethod = localStorage.getItem(this.authMethodKey) || 'jwt';
-
-    if (authMethod !== 'jwt') {
-      return null; // API keys don't expire
-    }
-
     const token = localStorage.getItem(this.tokenKey);
     if (!token) return null;
 
@@ -528,12 +411,6 @@ class AuthService {
    * @returns {number|null} - Milliseconds until next refresh or null
    */
   getTimeUntilNextRefresh() {
-    const authMethod = localStorage.getItem(this.authMethodKey) || 'jwt';
-
-    if (authMethod !== 'jwt') {
-      return null;
-    }
-
     const token = localStorage.getItem(this.tokenKey);
     if (!token) return null;
 
