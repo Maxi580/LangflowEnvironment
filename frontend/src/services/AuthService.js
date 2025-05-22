@@ -63,17 +63,18 @@ class AuthService {
   }
 
   /**
-   * Validates the token with LangFlow by making a test API call
+   * Validates the token with LangFlow using the whoami endpoint
    * @param {string} token - JWT token to validate
    * @returns {Promise<boolean>} - True if token is valid with LangFlow
    * @private
    */
   async _validateTokenWithLangFlow(token) {
     try {
-      // Try to fetch user flows - this requires authentication
-      const response = await fetch(config.api.getFlowsUrl(), {
+      // Use the whoami endpoint to validate the token
+      const response = await fetch(`${config.api.langflowUrl}/api/v1/users/whoami`, {
         method: 'GET',
         headers: {
+          'Accept': 'application/json',
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
@@ -118,7 +119,7 @@ class AuthService {
         return false;
       }
 
-      // Step 4: Validate token with LangFlow
+      // Step 4: Validate token with LangFlow using whoami endpoint
       const isValidWithLangFlow = await this._validateTokenWithLangFlow(token);
       if (!isValidWithLangFlow) {
         this._clearInvalidToken();
