@@ -20,7 +20,6 @@ function App() {
 
       if (event.type === 'TOKEN_UPDATED') {
         console.log('✅ Token updated, user remains authenticated');
-        // 🔥 FIX: Re-check auth status after token update to trigger redirect
         checkAuthStatus();
       } else if (event.type === 'AUTH_FAILED') {
         console.log('❌ Authentication failed, logging out user');
@@ -36,7 +35,7 @@ function App() {
   }, []);
 
   /**
-   * Checks current authentication status
+   * Checks current authentication status (update authenticated state)
    */
   const checkAuthStatus = async () => {
     try {
@@ -51,11 +50,6 @@ function App() {
         setUser(authStatus.user);
         console.log('✅ User authenticated:', authStatus.user.username);
 
-        // Optional: Log token status for debugging
-        if (authStatus.timeUntilExpiry) {
-          const minutesUntilExpiry = Math.round(authStatus.timeUntilExpiry / 1000 / 60);
-          console.log(`🕐 Token expires in ${minutesUntilExpiry} minutes`);
-        }
       } else {
         setIsAuthenticated(false);
         setUser(null);

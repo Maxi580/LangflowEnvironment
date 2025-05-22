@@ -104,8 +104,6 @@ class UserService {
     try {
       console.log('🚪 Logging out user...');
 
-      authService.clearToken();
-
       const token = localStorage.getItem('langflow_access_token');
       if (token) {
         try {
@@ -122,14 +120,11 @@ class UserService {
         }
       }
 
-      localStorage.removeItem('langflow_access_token');
-      localStorage.removeItem('langflow_token_type');
-      localStorage.removeItem('langflow_refresh_token');
-      localStorage.removeItem('auth_token');
+      authService.clearToken();
+
       localStorage.removeItem('current_user');
       localStorage.removeItem('user_id');
-      localStorage.removeItem('langflow_flowId');
-      localStorage.removeItem('langflow_session_id');
+
 
       console.log('✅ Logout complete');
     } catch (error) {
