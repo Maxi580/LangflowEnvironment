@@ -25,7 +25,7 @@ const Dashboard = ({ user }) => {
       <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
         <div className="flex justify-between items-center">
           <div className="flex items-center space-x-4">
-            <h1 className="text-xl font-bold text-white">LangFlow Dashboard</h1>
+            <h1 className="text-xl font-bold text-white">Agenten Dashboard</h1>
             {user && (
               <span className="text-slate-300 text-sm">
                 Welcome, {user.username}
