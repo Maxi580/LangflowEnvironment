@@ -40,8 +40,10 @@ class UserService {
         throw new Error('Invalid token received from server');
       }
 
+      // Store tokens via refresh service
       tokenRefreshService.storeTokens(tokenData.access_token, tokenData.refresh_token);
 
+      // Store user data in cookies
       this.storeUserData(credentials.username, userInfo.userId);
 
       return {
@@ -79,14 +81,38 @@ class UserService {
         })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Registration failed: ${response.status} ${response.statusText}`);
+      const responseData = await response.json();
+
+      // Check if the response indicates failure
+      if (!response.ok || responseData.success === false) {
+        // Parse nested error messages
+        let errorMessage = 'Registration failed';
+
+        if (responseData.message) {
+          try {
+            // Try to parse nested JSON error details
+            const nestedError = JSON.parse(responseData.message.replace('Failed to create user: ', ''));
+            errorMessage = nestedError.detail || responseData.message;
+          } catch {
+            // If parsing fails, use the message as is
+            errorMessage = responseData.message;
+          }
+        } else if (responseData.detail) {
+          errorMessage = responseData.detail;
+        }
+
+        throw new Error(errorMessage);
       }
 
-      return await response.json();
+      return responseData;
 
     } catch (error) {
+      // If it's already our custom error, re-throw it
+      if (error.message && !error.message.includes('fetch')) {
+        throw error;
+      }
+
+      // Handle network or other fetch errors
       throw new Error(`Registration failed: ${error.message}`);
     }
   }
@@ -141,6 +167,7 @@ class UserService {
         }
       }
     } finally {
+      // Always clear local data
       this.clearUserData();
       tokenRefreshService.clearTokens();
     }

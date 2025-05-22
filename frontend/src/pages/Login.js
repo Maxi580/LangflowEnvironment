@@ -111,18 +111,51 @@ const LoginPage = ({ onLoginSuccess }) => {
     setMessage({ type: '', text: '' });
 
     try {
-      await userService.register({ username, password });
+      const result = await userService.register({ username, password });
 
-      // Clear form on successful registration
-      setPassword('');
-      setMessage({
-        type: 'success',
-        text: 'Registration successful! You can now login with your credentials.'
-      });
+      if (result.success) {
+        setMessage({ type: 'success', text: 'Registration successful! Logging you in...' });
+
+        try {
+          const loginResult = await userService.login({ username, password });
+
+          if (loginResult.success) {
+            setUsername('');
+            setPassword('');
+
+            setMessage({ type: 'success', text: 'Registration and login successful! Redirecting...' });
+
+            setTimeout(() => {
+              if (onLoginSuccess) {
+                onLoginSuccess(loginResult.user);
+              }
+            }, 1500);
+          } else {
+            setPassword('');
+            setMessage({
+              type: 'success',
+              text: 'Registration successful! Please login with your credentials.'
+            });
+          }
+        } catch (loginError) {
+          setPassword('');
+          setMessage({
+            type: 'success',
+            text: 'Registration successful! Please login with your credentials.'
+          });
+        }
+      } else {
+        const messageText = result.message || 'Registration failed';
+        setMessage({
+          type: 'error',
+          text: messageText
+        });
+      }
+
     } catch (error) {
       setMessage({
         type: 'error',
-        text: error.message || 'Registration failed. Username might already exist.'
+        text: error.message || 'Registration failed. Please try again.'
       });
     } finally {
       setIsLoading(false);
