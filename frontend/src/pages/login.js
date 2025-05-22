@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import userService from '../services/UserService';
 
 const LoginPage = ({ onLogin }) => {
   const [username, setUsername] = useState('');
@@ -72,22 +71,8 @@ const LoginPage = ({ onLogin }) => {
     setMessage({ type: '', text: '' });
 
     try {
-      const result = await userService.login({ username, password });
-
-      if (result.success) {
-        setMessage({
-          type: 'success',
-          text: 'Login successful!'
-        });
-
-        // Call the parent component's onLogin function
-        onLogin(result);
-      } else {
-        setMessage({
-          type: 'error',
-          text: 'Login failed. Please check your credentials.'
-        });
-      }
+      // Just pass credentials to parent - let parent handle the actual login
+      await onLogin({ username, password, type: 'login' });
     } catch (error) {
       setMessage({
         type: 'error',
@@ -109,23 +94,15 @@ const LoginPage = ({ onLogin }) => {
     setMessage({ type: '', text: '' });
 
     try {
-      const result = await userService.createUser({
-        username,
-        password
-      });
+      // Just pass credentials to parent - let parent handle the registration
+      await onLogin({ username, password, type: 'register' });
 
-      if (result.success) {
-        setMessage({
-          type: 'success',
-          text: 'Registration successful! You can now login.'
-        });
-        setPassword('');
-      } else {
-        setMessage({
-          type: 'error',
-          text: result.message || 'Registration failed.'
-        });
-      }
+      // Clear password on successful registration
+      setPassword('');
+      setMessage({
+        type: 'success',
+        text: 'Registration successful! You can now login.'
+      });
     } catch (error) {
       setMessage({
         type: 'error',
@@ -179,6 +156,7 @@ const LoginPage = ({ onLogin }) => {
               className="w-full px-4 py-3 bg-slate-800 border-2 border-slate-600 rounded-full text-slate-200
                         placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400"
               disabled={isLoading}
+              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
             />
           </div>
 
