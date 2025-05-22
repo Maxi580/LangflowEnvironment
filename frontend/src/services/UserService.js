@@ -1,202 +1,70 @@
 import config from '../config';
-import authService from './AuthService'; // Import the AuthService
+import CookieHelper from '../utils/CookieHelper';
+import JWTHelper from '../utils/JWTHelper';
+import tokenRefreshService from './TokenRefreshService';
 
+/**
+ * User management service
+ * Handles login, registration, user data, and authentication state
+ */
 class UserService {
-  /**
-   * Parses JWT token to extract payload
-   * @param {string} token - JWT token
-   * @returns {Object} - Parsed token payload
-   */
-  parseJWT(token) {
-    try {
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(
-        atob(base64)
-          .split('')
-          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-          .join('')
-      );
-      return JSON.parse(jsonPayload);
-    } catch (error) {
-      throw new Error('Invalid JWT token');
-    }
+  constructor() {
+    this.USERNAME_COOKIE = 'username';
+    this.USER_ID_COOKIE = 'user_id';
   }
 
   /**
-   * Logs in a user to LangFlow and starts token management
+   * Login user with LangFlow
    * @param {Object} credentials - Username and password
-   * @returns {Promise<Object>} - Login result with user info
+   * @returns {Promise<Object>} - Login result
    */
   async login(credentials) {
-    if (!credentials.username || !credentials.password) {
-      throw new Error("Username and password are required");
-    }
+    this.validateCredentials(credentials);
 
     try {
-      console.log('🔐 Attempting login to LangFlow...');
-      const loginUrl = `${config.api.langflowUrl}/api/v1/login`;
-
-      const formData = new FormData();
-      formData.append('username', credentials.username);
-      formData.append('password', credentials.password);
-      formData.append('grant_type', 'password');
-
-      const response = await fetch(loginUrl, {
+      const response = await fetch(`${config.api.langflowUrl}/api/v1/login`, {
         method: 'POST',
-        headers: {
-          'Accept': 'application/json'
-        },
-        body: formData
+        headers: { 'Accept': 'application/json' },
+        body: this.createLoginFormData(credentials)
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.detail ||
-          `Login failed: ${response.status} ${response.statusText}`
-        );
+        throw new Error(errorData.detail || `Login failed: ${response.status} ${response.statusText}`);
       }
 
       const tokenData = await response.json();
-      console.log('✅ Login successful, received tokens');
+      const userInfo = JWTHelper.getUserInfo(tokenData.access_token);
 
-      const userInfo = this.parseJWT(tokenData.access_token);
-
-      if (tokenData.access_token) {
-        localStorage.setItem('langflow_access_token', tokenData.access_token);
-      }
-      if (tokenData.token_type) {
-        localStorage.setItem('langflow_token_type', tokenData.token_type);
-      }
-      if (tokenData.refresh_token) {
-        localStorage.setItem('langflow_refresh_token', tokenData.refresh_token);
+      if (!userInfo) {
+        throw new Error('Invalid token received from server');
       }
 
-      localStorage.setItem('current_user', credentials.username);
-      localStorage.setItem('user_id', userInfo.sub);
+      tokenRefreshService.storeTokens(tokenData.access_token, tokenData.refresh_token);
 
-      console.log('🔄 Starting AuthService token management...');
-      authService.setToken(tokenData.access_token, tokenData.refresh_token);
+      this.storeUserData(credentials.username, userInfo.userId);
 
-      const result = {
+      return {
         success: true,
         user: {
           username: credentials.username,
-          userId: userInfo.sub,
-          tokenExpiry: userInfo.exp
-        },
-        tokens: tokenData
-      };
-
-      console.log('🎉 Login complete with token management active');
-      return result;
-    } catch (error) {
-      console.error('❌ Login error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Logs out user and stops token management
-   */
-  async logout() {
-    try {
-      console.log('🚪 Logging out user...');
-
-      const token = localStorage.getItem('langflow_access_token');
-      if (token) {
-        try {
-          await fetch(`${config.api.langflowUrl}/api/v1/logout`, {
-            method: 'POST',
-            headers: {
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          });
-        } catch (error) {
-          console.log('Server logout notification failed (this is often normal):', error.message);
+          userId: userInfo.userId,
+          tokenExpiry: userInfo.expiry
         }
-      }
-
-      authService.clearToken();
-
-      localStorage.removeItem('current_user');
-      localStorage.removeItem('user_id');
-
-
-      console.log('✅ Logout complete');
-    } catch (error) {
-      console.error('Error during logout:', error);
-      authService.clearToken();
-      localStorage.clear();
-    }
-  }
-
-  /**
-   * Gets current user info
-   * @returns {Object|null} - Current user or null
-   */
-  getCurrentUser() {
-    const username = localStorage.getItem('current_user');
-    const userId = localStorage.getItem('user_id');
-    const token = localStorage.getItem('langflow_access_token');
-
-    if (!username || !token) {
-      return null;
-    }
-
-    try {
-      const tokenPayload = this.parseJWT(token);
-      return {
-        username,
-        userId: userId || tokenPayload.sub,
-        tokenExpiry: tokenPayload.exp,
-        isAuthenticated: true
       };
+
     } catch (error) {
-      return username ? { username, userId, isAuthenticated: false } : null;
+      throw new Error(`Login failed: ${error.message}`);
     }
   }
 
   /**
-   * Checks if user is currently authenticated
-   * Uses AuthService for accurate token validation
-   * @returns {Promise<boolean>} - True if authenticated
+   * Register new user with backend
+   * @param {Object} userData - Username and password
+   * @returns {Promise<Object>} - Registration result
    */
-  async isAuthenticated() {
-    // Use AuthService for accurate authentication check
-    return await authService.isAuthenticated();
-  }
-
-  /**
-   * Gets user authentication status with details
-   * @returns {Promise<Object>} - Detailed auth status
-   */
-  async getAuthStatus() {
-    const isAuth = await this.isAuthenticated();
-    const user = this.getCurrentUser();
-
-    return {
-      isAuthenticated: isAuth,
-      user: user,
-      tokenExpiry: user?.tokenExpiry,
-      timeUntilExpiry: authService.getTimeUntilExpiry(),
-      timeUntilRefresh: authService.getTimeUntilNextRefresh(),
-      isRefreshing: authService.isCurrentlyRefreshing()
-    };
-  }
-
-  /**
-   * Creates a new user account
-   * @param {Object} userData - The user data containing username and password
-   * @returns {Promise<Object>} - Result of the user creation operation
-   */
-  async createUser(userData) {
-    if (!userData.username || !userData.password) {
-      throw new Error("Username and password are required");
-    }
+  async register(userData) {
+    this.validateCredentials(userData);
 
     try {
       const response = await fetch(`${config.api.getBackendUrl()}/api/users`, {
@@ -213,23 +81,20 @@ class UserService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.detail ||
-          `Failed to create user: ${response.status} ${response.statusText}`
-        );
+        throw new Error(errorData.detail || `Registration failed: ${response.status} ${response.statusText}`);
       }
 
       return await response.json();
+
     } catch (error) {
-      console.error('Error creating user:', error);
-      throw error;
+      throw new Error(`Registration failed: ${error.message}`);
     }
   }
 
   /**
-   * Deletes a user account
-   * @param {string} userId - ID of the user to delete
-   * @returns {Promise<Object>} - Result of the deletion operation
+   * Delete user account
+   * @param {string} userId - User ID to delete
+   * @returns {Promise<Object>} - Deletion result
    */
   async deleteUser(userId) {
     if (!userId) {
@@ -237,54 +102,171 @@ class UserService {
     }
 
     try {
-      // Use AuthService for authenticated requests
-      const response = await authService.authenticatedFetch(
+      const response = await tokenRefreshService.authenticatedFetch(
         `${config.api.getBackendUrl()}/api/users/${userId}`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Accept': 'application/json'
-          }
-        }
+        { method: 'DELETE' }
       );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.detail ||
-          `Failed to delete user: ${response.status} ${response.statusText}`
-        );
+        throw new Error(errorData.detail || `User deletion failed: ${response.status} ${response.statusText}`);
       }
 
       return await response.json();
+
     } catch (error) {
-      console.error('Error deleting user:', error);
-      throw error;
+      throw new Error(`User deletion failed: ${error.message}`);
     }
   }
 
   /**
-   * Registers for AuthService events
-   * @param {Function} callback - Callback for auth events
+   * Logout user
+   */
+  async logout() {
+    try {
+      // Attempt server logout notification (best effort)
+      const accessToken = tokenRefreshService.getAccessToken();
+      if (accessToken) {
+        try {
+          await fetch(`${config.api.langflowUrl}/api/v1/logout`, {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        } catch (error) {
+          // Server logout notification failed - continue with local logout
+        }
+      }
+    } finally {
+      this.clearUserData();
+      tokenRefreshService.clearTokens();
+    }
+  }
+
+  /**
+   * Get current user information
+   * @returns {Object|null} - Current user data or null
+   */
+  getCurrentUser() {
+    const username = CookieHelper.getCookie(this.USERNAME_COOKIE);
+    const userId = CookieHelper.getCookie(this.USER_ID_COOKIE);
+    const accessToken = tokenRefreshService.getAccessToken();
+
+    if (!username || !accessToken) {
+      return null;
+    }
+
+    const userInfo = JWTHelper.getUserInfo(accessToken);
+
+    return {
+      username,
+      userId: userId || userInfo?.userId,
+      tokenExpiry: userInfo?.expiry,
+      isAuthenticated: true
+    };
+  }
+
+  /**
+   * Check if user is authenticated
+   * @returns {Promise<boolean>} - True if authenticated
+   */
+  async isAuthenticated() {
+    return await tokenRefreshService.isAuthenticated();
+  }
+
+  /**
+   * Get detailed authentication status
+   * @returns {Promise<Object>} - Authentication status details
+   */
+  async getAuthStatus() {
+    const isAuth = await this.isAuthenticated();
+    const user = this.getCurrentUser();
+
+    return {
+      isAuthenticated: isAuth,
+      user: user,
+      tokenExpiry: user?.tokenExpiry,
+      timeUntilExpiry: tokenRefreshService.getTimeUntilExpiry(),
+      timeUntilRefresh: tokenRefreshService.getTimeUntilRefresh(),
+      isRefreshing: tokenRefreshService.isCurrentlyRefreshing()
+    };
+  }
+
+  /**
+   * Add authentication event listener
+   * @param {Function} callback - Event callback
    */
   onAuthEvent(callback) {
-    authService.addTokenUpdateListener(callback);
+    tokenRefreshService.addEventListener(callback);
   }
 
   /**
-   * Unregisters from AuthService events
-   * @param {Function} callback - Callback to remove
+   * Remove authentication event listener
+   * @param {Function} callback - Event callback
    */
   offAuthEvent(callback) {
-    authService.removeTokenUpdateListener(callback);
+    tokenRefreshService.removeEventListener(callback);
   }
 
   /**
-   * Force a manual token refresh
-   * @returns {Promise<boolean>} - True if refresh successful
+   * Manual token refresh
+   * @returns {Promise<boolean>} - True if successful
    */
   async refreshAuth() {
-    return await authService.refreshTokenManually();
+    return await tokenRefreshService.performRefresh();
+  }
+
+  // ===== PRIVATE METHODS =====
+
+  /**
+   * Validate login/registration credentials
+   * @param {Object} credentials - Username and password
+   */
+  validateCredentials(credentials) {
+    if (!credentials.username || !credentials.password) {
+      throw new Error("Username and password are required");
+    }
+  }
+
+  /**
+   * Create form data for login request
+   * @param {Object} credentials - Username and password
+   * @returns {FormData} - Form data for login
+   */
+  createLoginFormData(credentials) {
+    const formData = new FormData();
+    formData.append('username', credentials.username);
+    formData.append('password', credentials.password);
+    formData.append('grant_type', 'password');
+    return formData;
+  }
+
+  /**
+   * Store user data in cookies
+   * @param {string} username - Username
+   * @param {string} userId - User ID
+   */
+  storeUserData(username, userId) {
+    CookieHelper.setCookie(this.USERNAME_COOKIE, username, {
+      secure: true,
+      sameSite: 'Strict'
+    });
+
+    CookieHelper.setCookie(this.USER_ID_COOKIE, userId, {
+      secure: true,
+      sameSite: 'Strict'
+    });
+  }
+
+  /**
+   * Clear user data from cookies
+   */
+  clearUserData() {
+    CookieHelper.deleteCookie(this.USERNAME_COOKIE);
+    CookieHelper.deleteCookie(this.USER_ID_COOKIE);
   }
 }
 
