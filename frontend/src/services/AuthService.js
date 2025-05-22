@@ -1,12 +1,39 @@
 import config from '../config';
 
 /**
- * Authentication service focused on JWT token validation
- * Provides a single public method: isAuthenticated()
+ * LangFlow-Compatible Authentication service with Proactive Silent Refresh
+ * Handles LangFlow's actual authentication patterns
  */
 class AuthService {
   constructor() {
     this.tokenKey = 'langflow_access_token';
+    this.refreshTokenKey = 'langflow_refresh_token';
+    this.apiKeyKey = 'langflow_api_key';
+    this.authMethodKey = 'langflow_auth_method';
+
+    this.refreshTimer = null;
+    this.isRefreshing = false;
+    this.refreshPromise = null;
+    this.REFRESH_BUFFER = 5 * 60 * 1000;
+
+    this.authEventListeners = new Set();
+
+    this._initializeSilentRefresh();
+  }
+
+  /**
+   * Initialize silent refresh on service creation
+   * @private
+   */
+  _initializeSilentRefresh() {
+    const authMethod = localStorage.getItem(this.authMethodKey) || 'jwt';
+
+    if (authMethod === 'jwt') {
+      const token = localStorage.getItem(this.tokenKey);
+      if (token && this._isValidJWTFormat(token) && !this._isTokenExpired(token)) {
+        this._scheduleNextRefresh(token);
+      }
+    }
   }
 
   /**
@@ -20,21 +47,33 @@ class AuthService {
       return false;
     }
 
-    // JWT should have 3 parts separated by dots
     const parts = token.split('.');
     if (parts.length !== 3) {
       return false;
     }
 
     try {
-      // Try to decode the header and payload (don't verify signature here)
       const header = JSON.parse(atob(parts[0].replace(/-/g, '+').replace(/_/g, '/')));
       const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-
-      // Basic checks for required JWT fields
-      return header && payload && header.typ === 'JWT';
+      return header && payload;
     } catch (error) {
       return false;
+    }
+  }
+
+  /**
+   * Gets token expiration time in milliseconds
+   * @param {string} token - JWT token
+   * @returns {number|null} - Expiration timestamp or null
+   * @private
+   */
+  _getTokenExpiration(token) {
+    try {
+      const parts = token.split('.');
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      return payload.exp ? payload.exp * 1000 : null;
+    } catch (error) {
+      return null;
     }
   }
 
@@ -45,92 +84,481 @@ class AuthService {
    * @private
    */
   _isTokenExpired(token) {
-    try {
-      const parts = token.split('.');
-      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    const expiration = this._getTokenExpiration(token);
+    if (!expiration) return false;
+    return Date.now() >= expiration;
+  }
 
-      if (!payload.exp) {
-        // If no expiration, consider it valid
-        return false;
-      }
+  /**
+   * Schedules the next automatic token refresh
+   * @param {string} token - Current JWT token
+   * @private
+   */
+  _scheduleNextRefresh(token) {
+    this._clearRefreshTimer();
 
-      // Check if current time is past expiration (exp is in seconds)
-      const currentTime = Math.floor(Date.now() / 1000);
-      return currentTime >= payload.exp;
-    } catch (error) {
-      return true; // If we can't parse it, consider it expired
+    const expiration = this._getTokenExpiration(token);
+    if (!expiration) return;
+
+    const refreshTime = Math.max(0, expiration - this.REFRESH_BUFFER - Date.now());
+
+    if (refreshTime <= 0) {
+      console.log('🔄 Token expires soon, attempting refresh...');
+      this._performSilentRefresh();
+      return;
+    }
+
+    console.log(`🕐 Token refresh scheduled in ${Math.round(refreshTime / 1000 / 60)} minutes`);
+
+    this.refreshTimer = setTimeout(() => {
+      console.log('🔄 Performing scheduled token refresh...');
+      this._performSilentRefresh();
+    }, refreshTime);
+  }
+
+  /**
+   * Clears the refresh timer
+   * @private
+   */
+  _clearRefreshTimer() {
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
     }
   }
 
   /**
-   * Validates the token with LangFlow using the whoami endpoint
+   * Performs the actual token refresh - LangFlow compatible
+   * @returns {Promise<string|null>} - New token or null if failed
+   * @private
+   */
+  async _performSilentRefresh() {
+    // Prevent multiple simultaneous refresh attempts
+    if (this.isRefreshing) {
+      return this.refreshPromise;
+    }
+
+    this.isRefreshing = true;
+
+    this.refreshPromise = (async () => {
+      try {
+        const currentToken = localStorage.getItem(this.tokenKey);
+        if (!currentToken) {
+          throw new Error('No token to refresh');
+        }
+
+        console.log('🔄 Attempting silent token refresh...');
+
+        // Strategy 1: Try to validate token - maybe it's still valid
+        const isStillValid = await this._validateTokenWithLangFlow(currentToken);
+        if (isStillValid) {
+          console.log('✅ Token is still valid, no refresh needed');
+          this._scheduleNextRefresh(currentToken);
+          return currentToken;
+        }
+
+        // Strategy 2: Try session-based refresh (cookies)
+        let newToken = await this._trySessionBasedRefresh();
+
+        // Strategy 3: If no session refresh, user needs to re-authenticate
+        if (!newToken) {
+          console.log('❌ Silent refresh failed - user needs to re-authenticate');
+          throw new Error('Token refresh failed');
+        }
+
+        // Successfully refreshed
+        this._updateToken(newToken);
+        console.log('✅ Token refreshed successfully');
+
+        // Schedule next refresh
+        this._scheduleNextRefresh(newToken);
+
+        // Notify listeners of token update
+        this._notifyAuthEvent({ type: 'TOKEN_UPDATED', token: newToken });
+
+        return newToken;
+
+      } catch (error) {
+        console.error('❌ Silent refresh failed:', error);
+        this._handleRefreshFailure();
+        return null;
+      } finally {
+        this.isRefreshing = false;
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
+  }
+
+  /**
+   * Validates token with LangFlow
    * @param {string} token - JWT token to validate
-   * @returns {Promise<boolean>} - True if token is valid with LangFlow
+   * @returns {Promise<boolean>} - True if token is valid
    * @private
    */
   async _validateTokenWithLangFlow(token) {
     try {
-      // Use the whoami endpoint to validate the token
-      const response = await fetch(`${config.api.langflowUrl}/api/v1/users/whoami`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      // Try different possible validation endpoints
+      const possibleEndpoints = [
+        `${config.api.langflowUrl}/api/v1/users/whoami`,
+        `${config.api.langflowUrl}/api/v1/auth/me`,
+        `${config.api.langflowUrl}/api/v1/user/profile`,
+        `${config.api.langflowUrl}/health` // Fallback - some endpoints don't need auth
+      ];
 
-      return response.status === 200;
+      for (const endpoint of possibleEndpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            credentials: 'include'
+          });
+
+          if (response.ok) {
+            return true;
+          }
+        } catch (err) {
+          continue;
+        }
+      }
+
+      return false;
     } catch (error) {
       return false;
     }
   }
 
   /**
-   * Clears invalid authentication data from localStorage
+   * Attempts session-based refresh using cookies
+   * @returns {Promise<string|null>} - New token or null
    * @private
    */
-  _clearInvalidToken() {
-    localStorage.removeItem(this.tokenKey);
+  async _trySessionBasedRefresh() {
+    try {
+      // LangFlow might support getting a new token via session cookies
+      const possibleEndpoints = [
+        `${config.api.langflowUrl}/api/v1/auth/token`,
+        `${config.api.langflowUrl}/api/v1/token`,
+        `${config.api.langflowUrl}/api/v1/auth/refresh-session`
+      ];
+
+      for (const endpoint of possibleEndpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json'
+            },
+            credentials: 'include' // Include cookies for session-based auth
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            return data.access_token || data.token || null;
+          }
+        } catch (err) {
+          continue;
+        }
+      }
+
+      return null;
+    } catch (error) {
+      return null;
+    }
   }
 
   /**
-   * Comprehensive authentication check
-   * Validates token existence, format, expiration, and server acceptance
+   * Updates the stored token
+   * @param {string} newToken - New JWT token
+   * @private
+   */
+  _updateToken(newToken) {
+    localStorage.setItem(this.tokenKey, newToken);
+    localStorage.setItem(this.authMethodKey, 'jwt');
+  }
+
+  /**
+   * Handles refresh failure
+   * @private
+   */
+  _handleRefreshFailure() {
+    console.log('🚪 Token refresh failed, user needs to re-authenticate');
+    this._clearAuthData();
+
+    // Notify listeners of authentication failure
+    this._notifyAuthEvent({ type: 'AUTH_FAILED' });
+  }
+
+  /**
+   * Clears all authentication data
+   * @private
+   */
+  _clearAuthData() {
+    localStorage.removeItem(this.tokenKey);
+    localStorage.removeItem(this.refreshTokenKey);
+    localStorage.removeItem(this.apiKeyKey);
+    localStorage.removeItem(this.authMethodKey);
+    this._clearRefreshTimer();
+  }
+
+  /**
+   * Notifies all listeners of auth events
+   * @param {Object} event - Event object
+   * @private
+   */
+  _notifyAuthEvent(event) {
+    this.authEventListeners.forEach(listener => {
+      try {
+        listener(event);
+      } catch (error) {
+        console.error('Error in auth event listener:', error);
+      }
+    });
+  }
+
+  // ===== PUBLIC METHODS =====
+
+  /**
+   * Main authentication check with automatic refresh
    * @returns {Promise<boolean>} - True if user is authenticated
    */
   async isAuthenticated() {
     try {
-      // Step 1: Check if token exists
+      const authMethod = localStorage.getItem(this.authMethodKey) || 'jwt';
+
+      if (authMethod === 'apikey') {
+        // API keys don't expire, just validate
+        const apiKey = localStorage.getItem(this.apiKeyKey);
+        if (!apiKey) return false;
+        return await this._validateWithAPIKey(apiKey);
+      }
+
+      // JWT token handling
       const token = localStorage.getItem(this.tokenKey);
-      if (!token) {
-        return false;
-      }
+      if (!token) return false;
 
-      // Step 2: Check if token has correct JWT format
       if (!this._isValidJWTFormat(token)) {
-        this._clearInvalidToken();
+        this._clearAuthData();
         return false;
       }
 
-      // Step 3: Check if token is expired
+      // If token is expired, try silent refresh
       if (this._isTokenExpired(token)) {
-        this._clearInvalidToken();
-        return false;
+        console.log('🔄 Token expired, attempting silent refresh...');
+        const newToken = await this._performSilentRefresh();
+        return newToken !== null;
       }
 
-      // Step 4: Validate token with LangFlow using whoami endpoint
-      const isValidWithLangFlow = await this._validateTokenWithLangFlow(token);
-      if (!isValidWithLangFlow) {
-        this._clearInvalidToken();
-        return false;
+      // Validate with server
+      const isValid = await this._validateTokenWithLangFlow(token);
+      if (!isValid) {
+        console.log('🔄 Token invalid with server, attempting refresh...');
+        const newToken = await this._performSilentRefresh();
+        return newToken !== null;
+      }
+
+      // Ensure refresh is scheduled
+      if (!this.refreshTimer) {
+        this._scheduleNextRefresh(token);
       }
 
       return true;
     } catch (error) {
-      this._clearInvalidToken();
+      console.error('Authentication check failed:', error);
+      this._clearAuthData();
       return false;
     }
+  }
+
+  /**
+   * Validates API key with server
+   * @param {string} apiKey - API key to validate
+   * @returns {Promise<boolean>} - True if valid
+   * @private
+   */
+  async _validateWithAPIKey(apiKey) {
+    try {
+      const response = await fetch(`${config.api.langflowUrl}/api/v1/users/whoami`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'x-api-key': apiKey,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.ok;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Sets a new JWT token and starts silent refresh
+   * @param {string} token - JWT token to set
+   * @param {string} refreshToken - Optional refresh token
+   */
+  setToken(token, refreshToken = null) {
+    if (!token || typeof token !== 'string') {
+      throw new Error('Invalid token provided');
+    }
+
+    console.log('🔑 Setting new JWT token and starting silent refresh');
+    this._updateToken(token);
+
+    if (refreshToken) {
+      localStorage.setItem(this.refreshTokenKey, refreshToken);
+    }
+
+    this._scheduleNextRefresh(token);
+
+    // Notify listeners
+    this._notifyAuthEvent({ type: 'TOKEN_UPDATED', token });
+  }
+
+  /**
+   * Sets an API key for authentication
+   * @param {string} apiKey - API key to set
+   */
+  setApiKey(apiKey) {
+    if (!apiKey || typeof apiKey !== 'string') {
+      throw new Error('Invalid API key provided');
+    }
+
+    console.log('🗝️ Setting API key');
+    localStorage.setItem(this.apiKeyKey, apiKey);
+    localStorage.setItem(this.authMethodKey, 'apikey');
+
+    // Clear any JWT refresh timer since API keys don't expire
+    this._clearRefreshTimer();
+
+    // Notify listeners
+    this._notifyAuthEvent({ type: 'APIKEY_UPDATED', apiKey });
+  }
+
+  /**
+   * Clears all authentication data
+   */
+  clearToken() {
+    console.log('🚪 Clearing all authentication data');
+    this._clearAuthData();
+  }
+
+  /**
+   * Enhanced fetch with automatic authentication headers
+   * @param {string} url - Request URL
+   * @param {Object} options - Fetch options
+   * @returns {Promise<Response>} - Fetch response
+   */
+  async authenticatedFetch(url, options = {}) {
+    // Ensure we have valid auth first
+    const isAuth = await this.isAuthenticated();
+    if (!isAuth) {
+      throw new Error('Authentication required');
+    }
+
+    const authMethod = localStorage.getItem(this.authMethodKey) || 'jwt';
+    const headers = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      ...options.headers
+    };
+
+    if (authMethod === 'jwt') {
+      const token = localStorage.getItem(this.tokenKey);
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+    } else if (authMethod === 'apikey') {
+      const apiKey = localStorage.getItem(this.apiKeyKey);
+      if (apiKey) {
+        headers['x-api-key'] = apiKey;
+      }
+    }
+
+    return fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include'
+    });
+  }
+
+  /**
+   * Adds a listener for authentication events
+   * @param {Function} listener - Function to call on auth events
+   */
+  addTokenUpdateListener(listener) {
+    this.authEventListeners.add(listener);
+  }
+
+  /**
+   * Removes an authentication event listener
+   * @param {Function} listener - Listener function to remove
+   */
+  removeTokenUpdateListener(listener) {
+    this.authEventListeners.delete(listener);
+  }
+
+  /**
+   * Gets time until token expires (JWT only)
+   * @returns {number|null} - Milliseconds until expiry or null
+   */
+  getTimeUntilExpiry() {
+    const authMethod = localStorage.getItem(this.authMethodKey) || 'jwt';
+
+    if (authMethod !== 'jwt') {
+      return null; // API keys don't expire
+    }
+
+    const token = localStorage.getItem(this.tokenKey);
+    if (!token) return null;
+
+    const expiration = this._getTokenExpiration(token);
+    if (!expiration) return null;
+
+    return Math.max(0, expiration - Date.now());
+  }
+
+  /**
+   * Gets time until next scheduled refresh (JWT only)
+   * @returns {number|null} - Milliseconds until next refresh or null
+   */
+  getTimeUntilNextRefresh() {
+    const authMethod = localStorage.getItem(this.authMethodKey) || 'jwt';
+
+    if (authMethod !== 'jwt') {
+      return null;
+    }
+
+    const token = localStorage.getItem(this.tokenKey);
+    if (!token) return null;
+
+    const expiration = this._getTokenExpiration(token);
+    if (!expiration) return null;
+
+    const nextRefresh = expiration - this.REFRESH_BUFFER;
+    return Math.max(0, nextRefresh - Date.now());
+  }
+
+  /**
+   * Checks if a refresh is currently in progress
+   * @returns {boolean} - True if refreshing
+   */
+  isCurrentlyRefreshing() {
+    return this.isRefreshing;
+  }
+
+  /**
+   * Cleanup method - call when service is no longer needed
+   */
+  destroy() {
+    console.log('🧹 Cleaning up AuthService');
+    this._clearRefreshTimer();
+    this.authEventListeners.clear();
   }
 }
 

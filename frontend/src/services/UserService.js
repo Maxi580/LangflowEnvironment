@@ -1,4 +1,5 @@
 import config from '../config';
+import authService from './AuthService'; // Import the AuthService
 
 class UserService {
   /**
@@ -23,7 +24,7 @@ class UserService {
   }
 
   /**
-   * Logs in a user to LangFlow and saves JWT tokens
+   * Logs in a user to LangFlow and starts token management
    * @param {Object} credentials - Username and password
    * @returns {Promise<Object>} - Login result with user info
    */
@@ -33,6 +34,7 @@ class UserService {
     }
 
     try {
+      console.log('🔐 Attempting login to LangFlow...');
       const loginUrl = `${config.api.langflowUrl}/api/v1/login`;
 
       const formData = new FormData();
@@ -57,6 +59,7 @@ class UserService {
       }
 
       const tokenData = await response.json();
+      console.log('✅ Login successful, received tokens');
 
       const userInfo = this.parseJWT(tokenData.access_token);
 
@@ -70,11 +73,13 @@ class UserService {
         localStorage.setItem('langflow_refresh_token', tokenData.refresh_token);
       }
 
-      localStorage.setItem('auth_token', 'authenticated');
       localStorage.setItem('current_user', credentials.username);
       localStorage.setItem('user_id', userInfo.sub);
 
-      return {
+      console.log('🔄 Starting AuthService token management...');
+      authService.setToken(tokenData.access_token, tokenData.refresh_token);
+
+      const result = {
         success: true,
         user: {
           username: credentials.username,
@@ -83,24 +88,55 @@ class UserService {
         },
         tokens: tokenData
       };
+
+      console.log('🎉 Login complete with token management active');
+      return result;
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('❌ Login error:', error);
       throw error;
     }
   }
 
   /**
-   * Logs out user by clearing stored tokens
+   * Logs out user and stops token management
    */
-  logout() {
-    localStorage.removeItem('langflow_access_token');
-    localStorage.removeItem('langflow_token_type');
-    localStorage.removeItem('langflow_refresh_token');
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('current_user');
-    localStorage.removeItem('user_id');
-    localStorage.removeItem('langflow_flowId');
-    localStorage.removeItem('langflow_session_id');
+  async logout() {
+    try {
+      console.log('🚪 Logging out user...');
+
+      authService.clearToken();
+
+      const token = localStorage.getItem('langflow_access_token');
+      if (token) {
+        try {
+          await fetch(`${config.api.langflowUrl}/api/v1/logout`, {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        } catch (error) {
+          console.log('Server logout notification failed (this is often normal):', error.message);
+        }
+      }
+
+      localStorage.removeItem('langflow_access_token');
+      localStorage.removeItem('langflow_token_type');
+      localStorage.removeItem('langflow_refresh_token');
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('current_user');
+      localStorage.removeItem('user_id');
+      localStorage.removeItem('langflow_flowId');
+      localStorage.removeItem('langflow_session_id');
+
+      console.log('✅ Logout complete');
+    } catch (error) {
+      console.error('Error during logout:', error);
+      authService.clearToken();
+      localStorage.clear();
+    }
   }
 
   /**
@@ -121,11 +157,40 @@ class UserService {
       return {
         username,
         userId: userId || tokenPayload.sub,
-        tokenExpiry: tokenPayload.exp
+        tokenExpiry: tokenPayload.exp,
+        isAuthenticated: true
       };
     } catch (error) {
-      return username ? { username, userId } : null;
+      return username ? { username, userId, isAuthenticated: false } : null;
     }
+  }
+
+  /**
+   * Checks if user is currently authenticated
+   * Uses AuthService for accurate token validation
+   * @returns {Promise<boolean>} - True if authenticated
+   */
+  async isAuthenticated() {
+    // Use AuthService for accurate authentication check
+    return await authService.isAuthenticated();
+  }
+
+  /**
+   * Gets user authentication status with details
+   * @returns {Promise<Object>} - Detailed auth status
+   */
+  async getAuthStatus() {
+    const isAuth = await this.isAuthenticated();
+    const user = this.getCurrentUser();
+
+    return {
+      isAuthenticated: isAuth,
+      user: user,
+      tokenExpiry: user?.tokenExpiry,
+      timeUntilExpiry: authService.getTimeUntilExpiry(),
+      timeUntilRefresh: authService.getTimeUntilNextRefresh(),
+      isRefreshing: authService.isCurrentlyRefreshing()
+    };
   }
 
   /**
@@ -177,12 +242,16 @@ class UserService {
     }
 
     try {
-      const response = await fetch(`${config.api.getBackendUrl()}/api/users/${userId}`, {
-        method: 'DELETE',
-        headers: {
-          'Accept': 'application/json'
+      // Use AuthService for authenticated requests
+      const response = await authService.authenticatedFetch(
+        `${config.api.getBackendUrl()}/api/users/${userId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Accept': 'application/json'
+          }
         }
-      });
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -197,6 +266,30 @@ class UserService {
       console.error('Error deleting user:', error);
       throw error;
     }
+  }
+
+  /**
+   * Registers for AuthService events
+   * @param {Function} callback - Callback for auth events
+   */
+  onAuthEvent(callback) {
+    authService.addTokenUpdateListener(callback);
+  }
+
+  /**
+   * Unregisters from AuthService events
+   * @param {Function} callback - Callback to remove
+   */
+  offAuthEvent(callback) {
+    authService.removeTokenUpdateListener(callback);
+  }
+
+  /**
+   * Force a manual token refresh
+   * @returns {Promise<boolean>} - True if refresh successful
+   */
+  async refreshAuth() {
+    return await authService.refreshTokenManually();
   }
 }
 
