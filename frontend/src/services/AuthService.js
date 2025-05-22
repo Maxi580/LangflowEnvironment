@@ -95,8 +95,7 @@ class AuthService {
     const expiration = this._getTokenExpiration(token);
     if (!expiration) return;
 
-    //Zconst refreshTime = Math.max(0, expiration - this.REFRESH_BUFFER - Date.now());
-    const refreshTime = 10000
+    const refreshTime = Math.max(0, expiration - this.REFRESH_BUFFER - Date.now());
 
     if (refreshTime <= 0) {
       console.log('🔄 Token expires soon, attempting refresh...');
@@ -124,12 +123,53 @@ class AuthService {
   }
 
   /**
+ * Tries to refresh token using refresh token
+ *  @returns {Promise<{ accessToken: string, refreshToken: string } | null>} - New tokens or null if refresh failed * @private
+ */
+async _requestTokenRefresh() {
+  const refreshToken = localStorage.getItem(this.refreshTokenKey);
+  if (!refreshToken) {
+    console.warn('No refresh token available');
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${config.api.langflowUrl}/api/v1/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+
+      return {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token
+      };
+
+    } else {
+      console.warn('Refresh request failed:', await response.text());
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error during token refresh:', error);
+    return null;
+  }
+}
+
+
+  /**
    * Performs the actual token refresh - LangFlow compatible
    * @returns {Promise<string|null>} - New token or null if failed
    * @private
    */
   async _performSilentRefresh() {
-    // Prevent multiple simultaneous refresh attempts
     if (this.isRefreshing) {
       return this.refreshPromise;
     }
@@ -145,34 +185,22 @@ class AuthService {
 
         console.log('🔄 Attempting silent token refresh...');
 
-        // Strategy 1: Try to validate token - maybe it's still valid
-        /*const isStillValid = await this._validateTokenWithLangFlow(currentToken);
-        if (isStillValid) {
-          console.log('✅ Token is still valid, no refresh needed');
-          this._scheduleNextRefresh(currentToken);
-          return currentToken;
-        }*/
-
-        // Strategy 2: Try session-based refresh (cookies)
-        let newToken = await this._trySessionBasedRefresh();
-
-        // Strategy 3: If no session refresh, user needs to re-authenticate
-        if (!newToken) {
-          console.log('❌ Silent refresh failed - user needs to re-authenticate');
-          throw new Error('Token refresh failed');
+        const refreshed = await this._requestTokenRefresh();
+        if (!refreshed) {
+          console.error("Silent refresh failed");
+          return;
         }
+        const { accessToken, refreshToken } = refreshed;
 
-        // Successfully refreshed
-        this._updateToken(newToken);
+        this._updateToken(accessToken, refreshToken);
+
         console.log('✅ Token refreshed successfully');
 
-        // Schedule next refresh
-        this._scheduleNextRefresh(newToken);
+        this._scheduleNextRefresh(accessToken);
 
-        // Notify listeners of token update
-        this._notifyAuthEvent({ type: 'TOKEN_UPDATED', token: newToken });
+        this._notifyAuthEvent({ type: 'TOKEN_UPDATED', token: accessToken });
 
-        return newToken;
+        return accessToken;
 
       } catch (error) {
         console.error('❌ Silent refresh failed:', error);
@@ -225,10 +253,12 @@ class AuthService {
   /**
    * Updates the stored token
    * @param {string} newToken - New JWT token
+   * @param {string} refreshToken - New Refresh JWT token
    * @private
    */
-  _updateToken(newToken) {
+  _updateToken(newToken, refreshToken) {
     localStorage.setItem(this.tokenKey, newToken);
+    localStorage.setItem(this.refreshTokenKey, refreshToken);
   }
 
   /**
@@ -332,7 +362,6 @@ class AuthService {
 
     this._scheduleNextRefresh(token);
 
-    // Notify listeners
     this._notifyAuthEvent({ type: 'TOKEN_UPDATED', token });
   }
 
