@@ -73,12 +73,10 @@ class TokenRefreshService {
       }
     });
 
-    // If 401, try refresh once and retry
     if (response.status === 401) {
       const refreshSuccess = await this.performRefresh();
 
       if (refreshSuccess) {
-        // Retry original request
         response = await fetch(url, {
           ...options,
           credentials: 'include',

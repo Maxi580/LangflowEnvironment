@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import userService from '../services/UserService';
+import langflowRedirectService from '../services/LangflowRedirectService'
+import DeleteConfirmation from '../components/DeleteConfirmation';
 
 const Dashboard = ({ user }) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -12,21 +16,46 @@ const Dashboard = ({ user }) => {
       await userService.logout();
       navigate('/login', { replace: true });
     } catch (error) {
-      // Even if logout fails, redirect to login
       navigate('/login', { replace: true });
     } finally {
       setIsLoggingOut(false);
     }
   };
 
+  const handleDeleteUser = async () => {
+    if (!user?.userId) {
+      alert('User ID not found');
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      const result = await userService.deleteUser(user.userId);
+
+      if (result.success) {
+        // First logout the user, then redirect
+        await userService.logout();
+        alert('Account deleted successfully');
+        navigate('/login', { replace: true });
+      } else {
+        alert(`Failed to delete account: ${result.message}`);
+      }
+    } catch (error) {
+      alert(`Error deleting account: ${error.message}`);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+    }
+  };
+
   const redirectToLangflow = (targetPath = "/") => {
-  const redirectUrl = `http://localhost:7860${targetPath}`;
-  window.location.href = `http://localhost:8000/api/auth/redirect-langflow?redirect_url=${encodeURIComponent(redirectUrl)}`;
-};
+    const redirectUrl = `http://localhost:7860${targetPath}`;
+    window.location.href = `http://localhost:8000/api/auth/redirect-langflow?redirect_url=${encodeURIComponent(redirectUrl)}`;
+  };
 
   return (
     <div className="min-h-screen bg-slate-900">
-      {/* Header with user info and logout */}
+      {/* Header with user info, langflow, logout, and delete */}
       <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
         <div className="flex justify-between items-center">
           <div className="flex items-center space-x-4">
@@ -41,7 +70,7 @@ const Dashboard = ({ user }) => {
           <div className="flex items-center space-x-2">
             {/* Langflow Button */}
             <button
-              onClick={() => redirectToLangflow("/flows")}
+              onClick={() => langflowRedirectService.redirectToLangflow("/flows")}
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors
                         flex items-center space-x-2"
             >
@@ -52,6 +81,20 @@ const Dashboard = ({ user }) => {
               <span>Langflow</span>
             </button>
 
+            {/* Delete Account Button */}
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="px-3 py-2 bg-red-800 hover:bg-red-700 text-red-200 rounded transition-colors
+                       flex items-center space-x-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              <span className="text-sm">Delete</span>
+            </button>
+
+            {/* Logout Button */}
             <button
               onClick={handleLogout}
               disabled={isLoggingOut}
@@ -64,69 +107,21 @@ const Dashboard = ({ user }) => {
         </div>
       </header>
 
-      {/* Main Dashboard Content */}
+      {/* Empty main content - just the header */}
       <main className="container mx-auto px-4 py-6">
-        <div className="bg-slate-800 rounded-lg p-6">
-          <h2 className="text-2xl font-bold text-white mb-4">Dashboard</h2>
-
-          {user && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="bg-slate-700 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-white mb-2">User Info</h3>
-                <p className="text-slate-300">Username: {user.username}</p>
-                <p className="text-slate-300">User ID: {user.userId}</p>
-                {user.tokenExpiry && (
-                  <p className="text-slate-300">
-                    Token expires: {new Date(user.tokenExpiry * 1000).toLocaleString()}
-                  </p>
-                )}
-              </div>
-
-              <div className="bg-slate-700 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-white mb-2">Quick Actions</h3>
-                <div className="space-y-2">
-                  <button
-                    onClick={() => redirectToLangflow("/flows")}
-                    className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors"
-                  >
-                    Open Langflow
-                  </button>
-                  <button className="w-full px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded transition-colors">
-                    Create Flow
-                  </button>
-                  <button className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors">
-                    View Analytics
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-slate-700 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-white mb-2">Langflow Tools</h3>
-                <div className="space-y-2">
-                  <button
-                    onClick={() => redirectToLangflow("/flows")}
-                    className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors text-sm"
-                  >
-                    📊 Flows
-                  </button>
-                  <button
-                    onClick={() => redirectToLangflow("/components")}
-                    className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors text-sm"
-                  >
-                    🧩 Components
-                  </button>
-                  <button
-                    onClick={() => redirectToLangflow("/playground")}
-                    className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors text-sm"
-                  >
-                    🚀 Playground
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+        <div className="text-center text-slate-400">
+          <p>Dashboard content coming soon...</p>
         </div>
       </main>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmation
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteUser}
+        isLoading={isDeleting}
+        username={user?.username}
+      />
     </div>
   );
 };
