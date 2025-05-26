@@ -19,6 +19,11 @@ const Dashboard = ({ user }) => {
     }
   };
 
+  const redirectToLangflow = (targetPath = "/") => {
+  const redirectUrl = `http://localhost:7860${targetPath}`;
+  window.location.href = `http://localhost:8000/api/auth/redirect-langflow?redirect_url=${encodeURIComponent(redirectUrl)}`;
+};
+
   return (
     <div className="min-h-screen bg-slate-900">
       {/* Header with user info and logout */}
@@ -34,6 +39,19 @@ const Dashboard = ({ user }) => {
           </div>
 
           <div className="flex items-center space-x-2">
+            {/* Langflow Button */}
+            <button
+              onClick={() => redirectToLangflow("/flows")}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors
+                        flex items-center space-x-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span>Langflow</span>
+            </button>
+
             <button
               onClick={handleLogout}
               disabled={isLoggingOut}
@@ -67,6 +85,12 @@ const Dashboard = ({ user }) => {
               <div className="bg-slate-700 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-white mb-2">Quick Actions</h3>
                 <div className="space-y-2">
+                  <button
+                    onClick={() => redirectToLangflow("/flows")}
+                    className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors"
+                  >
+                    Open Langflow
+                  </button>
                   <button className="w-full px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded transition-colors">
                     Create Flow
                   </button>
@@ -77,10 +101,26 @@ const Dashboard = ({ user }) => {
               </div>
 
               <div className="bg-slate-700 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-white mb-2">Status</h3>
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  <span className="text-slate-300">Connected</span>
+                <h3 className="text-lg font-semibold text-white mb-2">Langflow Tools</h3>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => redirectToLangflow("/flows")}
+                    className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors text-sm"
+                  >
+                    📊 Flows
+                  </button>
+                  <button
+                    onClick={() => redirectToLangflow("/components")}
+                    className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors text-sm"
+                  >
+                    🧩 Components
+                  </button>
+                  <button
+                    onClick={() => redirectToLangflow("/playground")}
+                    className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors text-sm"
+                  >
+                    🚀 Playground
+                  </button>
                 </div>
               </div>
             </div>

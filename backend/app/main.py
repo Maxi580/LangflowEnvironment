@@ -4,12 +4,13 @@ from dotenv import load_dotenv
 
 from .api.routes.health import router as health_router
 from .api.routes.user import router as user_router
+from .api.routes.auth import router as auth_router
 
 load_dotenv()
 
 app = FastAPI(
     title="LangflowSetupBackend",
-    description="A backend API for user management and file processing",
+    description="A backend API to extend Langflow",
     version="1.0.0",
 )
 
@@ -23,6 +24,7 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(user_router)
+app.include_router(auth_router)
 
 @app.get("/")
 async def root():

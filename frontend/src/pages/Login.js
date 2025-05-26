@@ -77,7 +77,6 @@ const LoginPage = ({ onLoginSuccess }) => {
       if (result.success) {
         setMessage({ type: 'success', text: 'Login successful! Redirecting...' });
 
-        // Clear form
         setUsername('');
         setPassword('');
 

@@ -1,119 +1,9 @@
-version: '3'
+version: '3.8'
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: ${POSTGRES_CONTAINER_NAME}
-    hostname: ${POSTGRES_HOST}
-    restart: unless-stopped
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - langflow-network
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-langflow} -d ${POSTGRES_DB:-langflow} -h localhost" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
-  adminer:
-    image: adminer
-    container_name: adminer
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    environment:
-      - ADMINER_DEFAULT_SERVER=postgres
-      - ADMINER_DESIGN=flat
-    networks:
-      - langflow-network
-    depends_on:
-      - postgres
-
-  langflow:
-    build:
-      context: ./langflow
-      dockerfile: Dockerfile
-    container_name: ${LANGFLOW_CONTAINER_NAME}
-    hostname: ${LANGFLOW_HOST}
-    ports:
-      - "${LANGFLOW_PORT}:${LANGFLOW_PORT}"
-    volumes:
-      - langflow_data:/root/.langflow
-    restart: unless-stopped
-    networks:
-      - langflow-network
-    environment:
-      - LANGFLOW_HOST=${LANGFLOW_HOST}
-      - LANGFLOW_PORT=${LANGFLOW_PORT}
-      - LANGFLOW_AUTO_RELOAD=${LANGFLOW_AUTO_RELOAD}
-      - LANGFLOW_DEV=${LANGFLOW_DEV}
-      - LANGFLOW_DATABASE_URL=${LANGFLOW_DATABASE_URL}
-      - LANGFLOW_CACHE=${LANGFLOW_CACHE}
-      - LANGFLOW_ALLOWED_ORIGINS=${LANGFLOW_ALLOWED_ORIGINS}
-      - LANGFLOW_REMOVE_EXAMPLE_FLOWS=${LANGFLOW_REMOVE_EXAMPLE_FLOWS}
-      - LANGFLOW_SUPERUSER=${LANGFLOW_SUPERUSER}
-      - LANGFLOW_SUPERUSER_PASSWORD=${LANGFLOW_SUPERUSER_PASSWORD}
-      - LANGFLOW_SECRET_KEY=${LANGFLOW_SECRET_KEY}
-      - LANGFLOW_AUTO_LOGIN=${LANGFLOW_AUTO_LOGIN}
-      - LANGFLOW_AUTO_APPROVE_USERS=${LANGFLOW_AUTO_APPROVE_USERS}
-      - LANGFLOW_DISABLE_TOKEN_GENERATION=${LANGFLOW_DISABLE_TOKEN_GENERATION}
-      - LANGFLOW_ALLOW_USER_REGISTRATION=${LANGFLOW_ALLOW_USER_REGISTRATION}
-      - DO_NOT_TRACK=${DO_NOT_TRACK}
-      - LANGFLOW_STORE_ENVIRONMENT_VARIABLES=${LANGFLOW_STORE_ENVIRONMENT_VARIABLES}
-      - LANGFLOW_AUTO_MIGRATE=true
-      - PGHOST=${PGHOST}
-      - PGHOSTADDR=${PGHOSTADDR}
-      - PGPORT=${POSTGRES_PORT}
-      - PGSSLMODE=${POSTGRES_SSL_MODE}
-      - PG_COLOR=${PG_COLOR}
-      - PGCONNECT_TIMEOUT=${PGCONNECT_TIMEOUT}
-      - PGCLIENTENCODING=${PGCLIENTENCODING}
-
-    depends_on:
-      postgres:
-        condition: service_healthy
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:${LANGFLOW_PORT}/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: ${BACKEND_CONTAINER_NAME}
-    hostname: ${BACKEND_HOST}
-    ports:
-      - "${BACKEND_PORT}:${BACKEND_PORT}"
-    volumes:
-      - backend_data:${BACKEND_UPLOAD_DIR}
-    restart: unless-stopped
-    networks:
-      - langflow-network
-    environment:
-      - SERVER_HOST=${BACKEND_HOST}
-      - SERVER_PORT=${BACKEND_PORT}
-      - EXTERNAL_LANGFLOW_URL=${EXTERNAL_LANGFLOW_URL}
-      - BACKEND_LOG_LEVEL=${BACKEND_LOG_LEVEL}
-      - BACKEND_ALLOW_ORIGINS=${BACKEND_ALLOW_ORIGINS}
-      - BACKEND_MAX_FILE_SIZE=${BACKEND_MAX_FILE_SIZE}
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # ============================================================
+  # APPLICATION SERVICES (Internal only)
+  # ============================================================
 
   frontend:
     build:
@@ -126,8 +16,8 @@ services:
       - ./frontend:/app
       - /app/node_modules
     environment:
-      - REACT_APP_LANGFLOW_API=${REACT_APP_LANGFLOW_API}
       - REACT_APP_BACKEND_API=${REACT_APP_BACKEND_API}
+      - REACT_APP_LANGFLOW_API=${REACT_APP_LANGFLOW_API}
       - NODE_ENV=${NODE_ENV}
       - WDS_SOCKET_HOST=${WDS_SOCKET_HOST}
       - CHOKIDAR_USEPOLLING=${CHOKIDAR_USEPOLLING}
@@ -135,17 +25,148 @@ services:
       - BROWSER=${BROWSER}
       - REACT_APP_VERSION=${REACT_APP_VERSION}
       - REACT_APP_DEFAULT_FLOW_ID=${REACT_APP_DEFAULT_FLOW_ID}
+    restart: unless-stopped
     networks:
-      - langflow-network
+      - app-network
     depends_on:
       - backend
-      - langflow
 
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ${BACKEND_CONTAINER_NAME}
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    volumes:
+      - backend_data:${BACKEND_UPLOAD_DIR}
+    environment:
+      # Server config
+      - SERVER_HOST=${BACKEND_HOST}
+      - SERVER_PORT=${BACKEND_PORT}
+      # Use auto-generated URLs
+      - LANGFLOW_EXTERNAL_URL=${LANGFLOW_URL}
+      - LANGFLOW_INTERNAL_URL=${LANGFLOW_INTERNAL_URL}
+      # Auth config
+      - BACKEND_LF_USERNAME=${BACKEND_LF_USERNAME}
+      - BACKEND_LF_PASSWORD=${BACKEND_LF_PASSWORD}
+      # Other config
+      - BACKEND_LOG_LEVEL=${BACKEND_LOG_LEVEL}
+      - BACKEND_ALLOW_ORIGINS=${BACKEND_ALLOW_ORIGINS}
+      - BACKEND_MAX_FILE_SIZE=${BACKEND_MAX_FILE_SIZE}
+    restart: unless-stopped
+    networks:
+      - app-network
+    depends_on:
+      - langflow
+      - postgres
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  langflow:
+    build:
+      context: ./langflow
+      dockerfile: Dockerfile
+    container_name: ${LANGFLOW_CONTAINER_NAME}
+    ports:
+      - "${LANGFLOW_PORT}:${LANGFLOW_PORT}"
+    volumes:
+      - langflow_data:/root/.langflow
+    environment:
+      # Server config
+      - LANGFLOW_HOST=${LANGFLOW_HOST}
+      - LANGFLOW_PORT=${LANGFLOW_PORT}
+      # Database (auto-generated URL)
+      - LANGFLOW_DATABASE_URL=${LANGFLOW_DATABASE_URL}
+      # Application config
+      - LANGFLOW_AUTO_RELOAD=${LANGFLOW_AUTO_RELOAD}
+      - LANGFLOW_DEV=${LANGFLOW_DEV}
+      - LANGFLOW_CACHE=${LANGFLOW_CACHE}
+      - LANGFLOW_ALLOWED_ORIGINS=${LANGFLOW_ALLOWED_ORIGINS}
+      - LANGFLOW_REMOVE_EXAMPLE_FLOWS=${LANGFLOW_REMOVE_EXAMPLE_FLOWS}
+      - DO_NOT_TRACK=${DO_NOT_TRACK}
+      - LANGFLOW_STORE_ENVIRONMENT_VARIABLES=${LANGFLOW_STORE_ENVIRONMENT_VARIABLES}
+      - LANGFLOW_AUTO_MIGRATE=${LANGFLOW_AUTO_MIGRATE}
+      # Authentication
+      - LANGFLOW_SUPERUSER=${LANGFLOW_SUPERUSER}
+      - LANGFLOW_SUPERUSER_PASSWORD=${LANGFLOW_SUPERUSER_PASSWORD}
+      - LANGFLOW_SECRET_KEY=${LANGFLOW_SECRET_KEY}
+      - LANGFLOW_AUTO_LOGIN=${LANGFLOW_AUTO_LOGIN}
+      - LANGFLOW_AUTO_APPROVE_USERS=${LANGFLOW_AUTO_APPROVE_USERS}
+      - LANGFLOW_DISABLE_TOKEN_GENERATION=${LANGFLOW_DISABLE_TOKEN_GENERATION}
+      - LANGFLOW_ALLOW_USER_REGISTRATION=${LANGFLOW_ALLOW_USER_REGISTRATION}
+    restart: unless-stopped
+    networks:
+      - app-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${LANGFLOW_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================
+  # DATABASE SERVICES
+  # ============================================================
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: ${POSTGRES_CONTAINER_NAME}
+    hostname: ${POSTGRES_HOST}
+    ports:
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    restart: unless-stopped
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # ADMIN TOOLS (Optional)
+  # ============================================================
+
+  adminer:
+    image: adminer
+    container_name: ${ADMINER_CONTAINER_NAME}
+    ports:
+      - "${ADMINER_PORT}:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=${POSTGRES_HOST}
+      - ADMINER_DESIGN=flat
+    restart: unless-stopped
+    networks:
+      - app-network
+    depends_on:
+      - postgres
+
+# ============================================================
+# VOLUMES
+# ============================================================
 volumes:
   langflow_data:
+    driver: local
   backend_data:
+    driver: local
   postgres_data:
+    driver: local
 
+# ============================================================
+# NETWORKS
+# ============================================================
 networks:
-  langflow-network:
+  app-network:
     driver: bridge
