@@ -14,12 +14,28 @@ app = FastAPI(
     version="1.0.0",
 )
 
+ENV = "dev"
+
+if ENV == "dev":
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
+else:
+    allowed_origins = [
+        "https://yourdomain.com",
+        "https://www.yourdomain.com"
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 app.include_router(health_router)

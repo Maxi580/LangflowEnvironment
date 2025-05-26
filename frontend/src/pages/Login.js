@@ -77,15 +77,17 @@ const LoginPage = ({ onLoginSuccess }) => {
       if (result.success) {
         setMessage({ type: 'success', text: 'Login successful! Redirecting...' });
 
+        // Clear the form
         setUsername('');
         setPassword('');
 
-        // Notify parent component of successful login
+        // Immediate redirect - no delay
         if (onLoginSuccess) {
           onLoginSuccess(result.user);
         }
       }
     } catch (error) {
+      console.error('Login error:', error);
       setMessage({
         type: 'error',
         text: error.message || 'Login failed. Please check your credentials and try again.'
@@ -115,6 +117,7 @@ const LoginPage = ({ onLoginSuccess }) => {
       if (result.success) {
         setMessage({ type: 'success', text: 'Registration successful! Logging you in...' });
 
+        // Auto-login after successful registration
         try {
           const loginResult = await userService.login({ username, password });
 
@@ -124,12 +127,12 @@ const LoginPage = ({ onLoginSuccess }) => {
 
             setMessage({ type: 'success', text: 'Registration and login successful! Redirecting...' });
 
-            setTimeout(() => {
-              if (onLoginSuccess) {
-                onLoginSuccess(loginResult.user);
-              }
-            }, 1500);
+            // Immediate redirect - no delay
+            if (onLoginSuccess) {
+              onLoginSuccess(loginResult.user);
+            }
           } else {
+            // Registration successful but auto-login failed
             setPassword('');
             setMessage({
               type: 'success',
@@ -137,6 +140,7 @@ const LoginPage = ({ onLoginSuccess }) => {
             });
           }
         } catch (loginError) {
+          console.error('Auto-login after registration failed:', loginError);
           setPassword('');
           setMessage({
             type: 'success',
@@ -144,14 +148,14 @@ const LoginPage = ({ onLoginSuccess }) => {
           });
         }
       } else {
-        const messageText = result.message || 'Registration failed';
         setMessage({
           type: 'error',
-          text: messageText
+          text: result.message || 'Registration failed'
         });
       }
 
     } catch (error) {
+      console.error('Registration error:', error);
       setMessage({
         type: 'error',
         text: error.message || 'Registration failed. Please try again.'
@@ -168,9 +172,17 @@ const LoginPage = ({ onLoginSuccess }) => {
   // Clear message when user starts typing
   useEffect(() => {
     if (message.text) {
-      clearMessage();
+      const timer = setTimeout(clearMessage, 100);
+      return () => clearTimeout(timer);
     }
   }, [username, password]);
+
+  // Handle Enter key press
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !isLoading && username && password) {
+      handleLogin();
+    }
+  };
 
   return (
     <div className="min-h-screen w-full bg-slate-900 flex items-center justify-center">
@@ -198,6 +210,7 @@ const LoginPage = ({ onLoginSuccess }) => {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              onKeyPress={handleKeyPress}
               placeholder="Username"
               className="w-full px-4 py-3 bg-slate-800 border-2 border-slate-600 rounded-full text-slate-200
                         placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400
@@ -212,13 +225,13 @@ const LoginPage = ({ onLoginSuccess }) => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onKeyPress={handleKeyPress}
               placeholder="Password"
               className="w-full px-4 py-3 bg-slate-800 border-2 border-slate-600 rounded-full text-slate-200
                         placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400
                         transition-colors"
               disabled={isLoading}
               autoComplete="current-password"
-              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
             />
           </div>
 

@@ -1,12 +1,8 @@
 import config from '../config';
 import CookieHelper from '../utils/CookieHelper';
-import JWTHelper from '../utils/JWTHelper';
-import tokenRefreshService from './TokenRefreshService';
+import TokenRefreshService from "./TokenRefreshService";
 
-/**
- * User management service
- * Handles login, registration, user data, and authentication state
- */
+
 class UserService {
   constructor() {
     this.USERNAME_COOKIE = 'username';
@@ -14,7 +10,7 @@ class UserService {
   }
 
   /**
-   * Login user with LangFlow
+   * Login user with secure backend endpoint
    * @param {Object} credentials - Username and password
    * @returns {Promise<Object>} - Login result
    */
@@ -22,36 +18,39 @@ class UserService {
     this.validateCredentials(credentials);
 
     try {
-      const response = await fetch(`${config.api.langflowUrl}/api/v1/login`, {
+      const response = await fetch(`${config.api.getBackendUrl()}/api/users/login`, {
         method: 'POST',
-        headers: { 'Accept': 'application/json' },
-        body: this.createLoginFormData(credentials)
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          username: credentials.username,
+          password: credentials.password
+        })
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Login failed: ${response.status} ${response.statusText}`);
+        throw new Error(errorData.message || errorData.detail || `Login failed: ${response.status} ${response.statusText}`);
       }
 
-      const tokenData = await response.json();
-      const userInfo = JWTHelper.getUserInfo(tokenData.access_token);
+      const responseData = await response.json();
 
-      if (!userInfo) {
-        throw new Error('Invalid token received from server');
+      if (!responseData.success) {
+        throw new Error(responseData.message || 'Login failed');
       }
 
-      // Store tokens via refresh service
-      tokenRefreshService.storeTokens(tokenData.access_token, tokenData.refresh_token);
-
-      // Store user data in cookies
-      this.storeUserData(credentials.username, userInfo.userId);
+      // Store user data in client-side cookies for quick access
+      this.storeUserData(responseData.user.username, responseData.user.userId);
 
       return {
         success: true,
         user: {
-          username: credentials.username,
-          userId: userInfo.userId,
-          tokenExpiry: userInfo.expiry
+          username: responseData.user.username,
+          userId: responseData.user.userId,
+          tokenExpiry: responseData.user.tokenExpiry
         }
       };
 
@@ -83,44 +82,36 @@ class UserService {
 
       const responseData = await response.json();
 
-      // Check if the response indicates failure
       if (!response.ok || responseData.success === false) {
-        // Parse nested error messages
         let errorMessage = 'Registration failed';
-
         if (responseData.message) {
           try {
-            // Try to parse nested JSON error details
+            // Handle nested error messages from backend
             const nestedError = JSON.parse(responseData.message.replace('Failed to create user: ', ''));
             errorMessage = nestedError.detail || responseData.message;
           } catch {
-            // If parsing fails, use the message as is
             errorMessage = responseData.message;
           }
         } else if (responseData.detail) {
           errorMessage = responseData.detail;
         }
-
         throw new Error(errorMessage);
       }
 
       return responseData;
 
     } catch (error) {
-      // If it's already our custom error, re-throw it
       if (error.message && !error.message.includes('fetch')) {
         throw error;
       }
-
-      // Handle network or other fetch errors
       throw new Error(`Registration failed: ${error.message}`);
     }
   }
 
   /**
-   * Delete user account
+   * Delete user account with automatic token refresh
    * @param {string} userId - User ID to delete
-   * @returns {Promise<Object>} - Deletion result
+   * @returns {Promise<Object>} - Delete result
    */
   async deleteUser(userId) {
     if (!userId) {
@@ -128,129 +119,163 @@ class UserService {
     }
 
     try {
-      const response = await tokenRefreshService.authenticatedFetch(
+      const response = await TokenRefreshService.authenticatedFetch(
         `${config.api.getBackendUrl()}/api/users/${userId}`,
-        { method: 'DELETE' }
+        {
+          method: 'DELETE'
+        }
       );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `User deletion failed: ${response.status} ${response.statusText}`);
+
+        if (response.status === 401) {
+          throw new Error('Authentication failed - please log in again');
+        }
+
+        if (response.status === 403) {
+          throw new Error('Not authorized to delete this user');
+        }
+
+        if (response.status === 404) {
+          throw new Error('User not found');
+        }
+
+        throw new Error(errorData.message || errorData.detail || `User deletion failed: ${response.status} ${response.statusText}`);
       }
 
-      return await response.json();
+      const result = await response.json();
+      return {
+        success: true,
+        message: result.message || 'User deleted successfully',
+        userId: result.user_id || userId
+      };
 
     } catch (error) {
-      throw new Error(`User deletion failed: ${error.message}`);
+      return {
+        success: false,
+        message: error.message || 'An error occurred while deleting the user'
+      };
     }
   }
 
   /**
-   * Logout user
+   * Logout user - Backend clears httpOnly cookies
+   * @returns {Promise<Object>} - Logout result
    */
   async logout() {
     try {
-      // Attempt server logout notification (best effort)
-      const accessToken = tokenRefreshService.getAccessToken();
-      if (accessToken) {
-        try {
-          await fetch(`${config.api.langflowUrl}/api/v1/logout`, {
-            method: 'POST',
-            headers: {
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            }
-          });
-        } catch (error) {
-          // Server logout notification failed - continue with local logout
-        }
-      }
+      const response = await fetch(`${config.api.getBackendUrl()}/api/users/logout`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+
+      const result = await response.json().catch(() => ({ success: true }));
+
+      return {
+        success: true,
+        message: result.message || 'Logged out successfully'
+      };
+
+    } catch (error) {
+      console.warn('Backend logout failed:', error);
+      return {
+        success: true, // Still consider it successful
+        message: 'Logged out (with cleanup errors)'
+      };
     } finally {
       // Always clear local data
       this.clearUserData();
-      tokenRefreshService.clearTokens();
     }
   }
 
   /**
-   * Get current user information
-   * @returns {Object|null} - Current user data or null
+   * Get current user information from local cookies
+   * @returns {Object|null} - User data or null
    */
   getCurrentUser() {
     const username = CookieHelper.getCookie(this.USERNAME_COOKIE);
     const userId = CookieHelper.getCookie(this.USER_ID_COOKIE);
-    const accessToken = tokenRefreshService.getAccessToken();
 
-    if (!username || !accessToken) {
+    if (!username) {
       return null;
     }
 
-    const userInfo = JWTHelper.getUserInfo(accessToken);
-
     return {
       username,
-      userId: userId || userInfo?.userId,
-      tokenExpiry: userInfo?.expiry,
+      userId,
       isAuthenticated: true
     };
   }
 
   /**
-   * Check if user is authenticated
-   * @returns {Promise<boolean>} - True if authenticated
+   * Check if user is authenticated via backend verification
+   * @returns {Promise<boolean>} - Authentication status
    */
   async isAuthenticated() {
-    return await tokenRefreshService.isAuthenticated();
+    try {
+      const response = await fetch(`${config.api.getBackendUrl()}/api/users/verify-auth`, {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        return false;
+      }
+
+      const result = await response.json();
+      return result.authenticated || false;
+
+    } catch (error) {
+      console.warn('Auth check failed:', error);
+      return false;
+    }
   }
 
   /**
-   * Get detailed authentication status
-   * @returns {Promise<Object>} - Authentication status details
+   * Get detailed authentication status from backend
+   * @returns {Promise<Object>} - Detailed auth status
    */
   async getAuthStatus() {
-    const isAuth = await this.isAuthenticated();
-    const user = this.getCurrentUser();
+    try {
+      const response = await fetch(`${config.api.getBackendUrl()}/api/users/auth-status`, {
+        credentials: 'include'
+      });
 
-    return {
-      isAuthenticated: isAuth,
-      user: user,
-      tokenExpiry: user?.tokenExpiry,
-      timeUntilExpiry: tokenRefreshService.getTimeUntilExpiry(),
-      timeUntilRefresh: tokenRefreshService.getTimeUntilRefresh(),
-      isRefreshing: tokenRefreshService.isCurrentlyRefreshing()
-    };
+      if (!response.ok) {
+        return {
+          isAuthenticated: false,
+          user: null,
+          tokens: null
+        };
+      }
+
+      const result = await response.json();
+      const localUser = this.getCurrentUser();
+
+      return {
+        isAuthenticated: result.authenticated,
+        user: result.authenticated ? {
+          ...result.user,
+          ...localUser // Merge backend user data with local data
+        } : null,
+        tokens: result.tokens || null,
+        message: result.message
+      };
+
+    } catch (error) {
+      console.warn('Auth status check failed:', error);
+      return {
+        isAuthenticated: false,
+        user: null,
+        tokens: null
+      };
+    }
   }
 
   /**
-   * Add authentication event listener
-   * @param {Function} callback - Event callback
-   */
-  onAuthEvent(callback) {
-    tokenRefreshService.addEventListener(callback);
-  }
-
-  /**
-   * Remove authentication event listener
-   * @param {Function} callback - Event callback
-   */
-  offAuthEvent(callback) {
-    tokenRefreshService.removeEventListener(callback);
-  }
-
-  /**
-   * Manual token refresh
-   * @returns {Promise<boolean>} - True if successful
-   */
-  async refreshAuth() {
-    return await tokenRefreshService.performRefresh();
-  }
-
-  // ===== PRIVATE METHODS =====
-
-  /**
-   * Validate login/registration credentials
+   * Validate user credentials
    * @param {Object} credentials - Username and password
+   * @throws {Error} - If credentials are invalid
    */
   validateCredentials(credentials) {
     if (!credentials.username || !credentials.password) {
@@ -259,37 +284,26 @@ class UserService {
   }
 
   /**
-   * Create form data for login request
-   * @param {Object} credentials - Username and password
-   * @returns {FormData} - Form data for login
-   */
-  createLoginFormData(credentials) {
-    const formData = new FormData();
-    formData.append('username', credentials.username);
-    formData.append('password', credentials.password);
-    formData.append('grant_type', 'password');
-    return formData;
-  }
-
-  /**
-   * Store user data in cookies
+   * Store user data in client-side cookies
    * @param {string} username - Username
    * @param {string} userId - User ID
    */
   storeUserData(username, userId) {
     CookieHelper.setCookie(this.USERNAME_COOKIE, username, {
-      secure: true,
+      secure: window.location.protocol === 'https:',
       sameSite: 'Strict'
     });
 
-    CookieHelper.setCookie(this.USER_ID_COOKIE, userId, {
-      secure: true,
-      sameSite: 'Strict'
-    });
+    if (userId) {
+      CookieHelper.setCookie(this.USER_ID_COOKIE, userId, {
+        secure: window.location.protocol === 'https:',
+        sameSite: 'Strict'
+      });
+    }
   }
 
   /**
-   * Clear user data from cookies
+   * Clear user data from client-side cookies
    */
   clearUserData() {
     CookieHelper.deleteCookie(this.USERNAME_COOKIE);

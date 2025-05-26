@@ -7,7 +7,10 @@ import LoginPage from '../pages/Login';
  * Login wrapper that redirects authenticated users to dashboard
  */
 const LoginRedirect = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(null); // null = loading
+  const [authState, setAuthState] = useState({
+    isAuthenticated: null, // null = loading
+    isLoading: true
+  });
 
   useEffect(() => {
     checkAuth();
@@ -15,32 +18,45 @@ const LoginRedirect = () => {
 
   const checkAuth = async () => {
     try {
+      setAuthState(prev => ({ ...prev, isLoading: true }));
+
       const isAuth = await userService.isAuthenticated();
-      setIsAuthenticated(isAuth);
+
+      setAuthState({
+        isAuthenticated: isAuth,
+        isLoading: false
+      });
+
     } catch (error) {
-      setIsAuthenticated(false);
+      console.error('Auth check failed:', error);
+      setAuthState({
+        isAuthenticated: false,
+        isLoading: false
+      });
     }
   };
 
-  const handleLoginSuccess = (userData) => {
-    // Force a re-check after successful login
-    setIsAuthenticated(true);
+  const handleLoginSuccess = async (userData) => {
+    // Force a re-check to ensure we have the latest auth state
+    await checkAuth();
+
+    // The Navigate will happen automatically when isAuthenticated becomes true
   };
 
   // Loading state
-  if (isAuthenticated === null) {
+  if (authState.isLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-sky-500 mx-auto mb-4"></div>
-          <p className="text-slate-300">Loading...</p>
+          <p className="text-slate-300">Checking authentication...</p>
         </div>
       </div>
     );
   }
 
   // Already authenticated - redirect to dashboard
-  if (isAuthenticated) {
+  if (authState.isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
   }
 
