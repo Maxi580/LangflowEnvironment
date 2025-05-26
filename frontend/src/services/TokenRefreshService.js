@@ -8,8 +8,8 @@ import JWTHelper from '../utils/JWTHelper'
 class TokenRefreshService {
   constructor() {
     this.REFRESH_BUFFER_MS = 5 * 60 * 1000; // 5 minutes
-    this.ACCESS_TOKEN_COOKIE = 'access_token';
-    this.REFRESH_TOKEN_COOKIE = 'refresh_token';
+    this.ACCESS_TOKEN_COOKIE = 'access_token_lf';
+    this.REFRESH_TOKEN_COOKIE = 'refresh_token_lf';
 
     this.refreshTimer = null;
     this.isRefreshing = false;
