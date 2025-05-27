@@ -108,31 +108,6 @@ const Dashboard = ({ user }) => {
 
       {/* Main Dashboard Content */}
       <main className="container mx-auto px-4 py-6">
-        {/* User Info Section */}
-        <div className="mb-6 bg-slate-800 rounded-lg p-4">
-          <h2 className="text-lg font-semibold text-white mb-2">Account Information</h2>
-          {user && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div>
-                <span className="text-slate-400">Username:</span>
-                <span className="ml-2 text-white">{user.username}</span>
-              </div>
-              <div>
-                <span className="text-slate-400">User ID:</span>
-                <span className="ml-2 text-white font-mono text-xs">{user.userId}</span>
-              </div>
-              {user.tokenExpiry && (
-                <div>
-                  <span className="text-slate-400">Token expires:</span>
-                  <span className="ml-2 text-white text-xs">
-                    {new Date(user.tokenExpiry * 1000).toLocaleString()}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
         {/* Flow Management Section */}
         <FlowManagement />
       </main>
