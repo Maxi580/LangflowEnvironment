@@ -306,16 +306,20 @@ async def refresh_token(request: Request, response: Response) -> Dict[str, Any]:
 
         refresh_url = f"{LANGFLOW_URL}/api/v1/refresh"
 
-        payload = {
-            "refresh_token": refresh_token
-        }
-
         headers = {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         }
 
-        langflow_response = requests.post(refresh_url, headers=headers, json=payload)
+        cookies = {
+            'refresh_token_lf': refresh_token
+        }
+
+        langflow_response = requests.post(
+            refresh_url,
+            headers=headers,
+            cookies=cookies
+        )
 
         if not langflow_response.ok:
             return {
@@ -406,8 +410,6 @@ async def refresh_token(request: Request, response: Response) -> Dict[str, Any]:
             "should_login": True
         }
 
-
-# Add these endpoints to your existing user.py file
 
 @router.post("/logout")
 async def logout(request: Request, response: Response) -> Dict[str, Any]:
@@ -526,7 +528,6 @@ async def get_auth_status(request: Request) -> Dict[str, Any]:
 
             access_token_valid = access_token_expiry > current_time
 
-            # Check refresh token if available
             refresh_token_valid = False
             refresh_token_expiry = None
             if refresh_token:

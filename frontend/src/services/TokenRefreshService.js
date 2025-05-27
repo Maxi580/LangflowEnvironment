@@ -15,7 +15,6 @@ class TokenRefreshService {
    * @returns {Promise<boolean>} - True if successful
    */
   async performRefresh() {
-    // Prevent multiple simultaneous refresh attempts
     if (this.isRefreshing) {
       return this.refreshPromise;
     }
@@ -62,7 +61,6 @@ class TokenRefreshService {
    * @returns {Promise<Response>} - Fetch response
    */
   async authenticatedFetch(url, options = {}) {
-    // First attempt
     let response = await fetch(url, {
       ...options,
       credentials: 'include',
