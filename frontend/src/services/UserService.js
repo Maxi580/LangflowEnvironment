@@ -160,7 +160,7 @@ class UserService {
   }
 
   /**
-   * Logout user - Backend clears httpOnly cookies
+   * Logout user - Backend handles Langflow logout, frontend clears ALL cookies
    * @returns {Promise<Object>} - Logout result
    */
   async logout() {
@@ -172,20 +172,25 @@ class UserService {
 
       const result = await response.json().catch(() => ({ success: true }));
 
+      const clearedCookies = CookieHelper.clearAllCookies();
+
       return {
         success: true,
-        message: result.message || 'Logged out successfully'
+        message: result.message || 'Logged out successfully',
+        cookies_cleared: clearedCookies.length,
+        cleared_cookie_names: clearedCookies
       };
 
     } catch (error) {
       console.warn('Backend logout failed:', error);
+
+      const clearedCookies = CookieHelper.clearAllCookies();
+
       return {
-        success: true, // Still consider it successful
-        message: 'Logged out (with cleanup errors)'
+        success: true,
+        message: 'Logged out (frontend cleanup only)',
+        cookies_cleared: clearedCookies.length
       };
-    } finally {
-      // Always clear local data
-      this.clearUserData();
     }
   }
 

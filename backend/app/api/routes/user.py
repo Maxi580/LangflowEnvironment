@@ -414,40 +414,47 @@ async def refresh_token(request: Request, response: Response) -> Dict[str, Any]:
 @router.post("/logout")
 async def logout(request: Request, response: Response) -> Dict[str, Any]:
     """
-    Logout user by clearing all authentication cookies
+    Logout user by calling Langflow logout endpoint
     """
     try:
         port = str(request.url.port or (443 if request.url.scheme == "https" else 80))
+        access_token = request.cookies.get(f"p{port}_access_token")
 
-        # Clear all authentication cookies by setting them to empty with max_age=0
-        cookies_to_clear = [
-            f"p{port}_access_token",
-            f"p{port}_refresh_token",
-            f"p{port}_username",
-            f"p{port}_user_id"
-        ]
+        langflow_logout_success = False
 
-        for cookie_name in cookies_to_clear:
-            response.set_cookie(
-                key=cookie_name,
-                value="",
-                httponly=True if "token" in cookie_name else False,
-                secure=request.url.scheme == "https",
-                samesite="strict",
-                max_age=0,  # Expire immediately
-                path="/"
-            )
+        if access_token:
+            try:
+                logout_url = f"{LANGFLOW_URL}/api/v1/logout"
+                payload = {}
+                headers = {
+                    'Accept': 'application/json',
+                    'Authorization': f'Bearer {access_token}'
+                }
+
+                langflow_response = requests.post(logout_url, headers=headers, data=payload, timeout=5)
+
+                if langflow_response.ok:
+                    langflow_logout_success = True
+                    print("Successfully logged out from Langflow")
+                else:
+                    print(f"Langflow logout failed with status: {langflow_response.status_code}")
+
+            except requests.exceptions.RequestException as e:
+                print(f"Error during Langflow logout: {e}")
+            except Exception as e:
+                print(f"Unexpected error during Langflow logout: {e}")
 
         return {
             "success": True,
-            "message": "Logged out successfully"
+            "message": "Logout request completed",
+            "langflow_logout": langflow_logout_success
         }
 
     except Exception as e:
         print(f"Logout error: {e}")
         return {
-            "success": True,  # Still return success even if there's an error
-            "message": "Logged out (with cleanup errors)"
+            "success": True,
+            "message": "Logout completed with errors"
         }
 
 
