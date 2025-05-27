@@ -107,41 +107,6 @@ class CookieHelper {
 
     this.setCookie(name, '', deleteOptions);
   }
-
-  /**
-   * Clear ALL cookies on this domain - Nuclear option
-   * This method doesn't hardcode any paths and clears everything
-   * @returns {Array} - List of cleared cookie names
-   */
-  static clearAllCookies() {
-    const cookies = document.cookie.split(";");
-    const clearedCookies = [];
-
-    for (let cookie of cookies) {
-      const eqPos = cookie.indexOf("=");
-      const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
-
-      if (name) {
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
-
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC;`;
-
-        const hostname = window.location.hostname;
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${hostname};`;
-
-        if (hostname.includes('.')) {
-          const parentDomain = '.' + hostname.split('.').slice(-2).join('.');
-          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${parentDomain};`;
-        }
-
-        clearedCookies.push(name);
-      }
-    }
-
-    console.log(`Nuclear logout: cleared ${clearedCookies.length} cookies:`, clearedCookies);
-    return clearedCookies;
-  }
-
 }
 
 export default CookieHelper;

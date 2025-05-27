@@ -414,7 +414,7 @@ async def refresh_token(request: Request, response: Response) -> Dict[str, Any]:
 @router.post("/logout")
 async def logout(request: Request, response: Response) -> Dict[str, Any]:
     """
-    Logout user by calling Langflow logout endpoint
+    Logout user by calling Langflow logout endpoint and clearing ALL cookies
     """
     try:
         port = str(request.url.port or (443 if request.url.scheme == "https" else 80))
@@ -422,6 +422,7 @@ async def logout(request: Request, response: Response) -> Dict[str, Any]:
 
         langflow_logout_success = False
 
+        # Call Langflow logout endpoint first
         if access_token:
             try:
                 logout_url = f"{LANGFLOW_URL}/api/v1/logout"
@@ -444,10 +445,28 @@ async def logout(request: Request, response: Response) -> Dict[str, Any]:
             except Exception as e:
                 print(f"Unexpected error during Langflow logout: {e}")
 
+        all_cookies = request.cookies
+        cookies_cleared = []
+
+        for cookie_name in all_cookies.keys():
+            response.set_cookie(
+                key=cookie_name,
+                value="",
+                httponly=True,
+                secure=request.url.scheme == "https",
+                samesite="strict",
+                max_age=0,
+                path="/"
+            )
+            cookies_cleared.append(cookie_name)
+
+        print(f"Cleared {len(cookies_cleared)} cookies: {cookies_cleared}")
+
         return {
             "success": True,
-            "message": "Logout request completed",
-            "langflow_logout": langflow_logout_success
+            "message": f"Logout completed - cleared {len(cookies_cleared)} cookies",
+            "langflow_logout": langflow_logout_success,
+            "cookies_cleared": len(cookies_cleared)
         }
 
     except Exception as e:
