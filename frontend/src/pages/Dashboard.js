@@ -4,6 +4,7 @@ import userService from '../services/UserService';
 import langflowRedirectService from '../services/LangflowRedirectService';
 import FlowManagement from '../components/FlowManagement';
 import DeleteConfirmation from '../components/DeleteConfirmation';
+import ChatManagement from "../components/ChatManagement";
 
 const Dashboard = ({ user }) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -117,6 +118,10 @@ const Dashboard = ({ user }) => {
         onConfirm={handleDeleteUser}
         isLoading={isDeleting}
         username={user?.username}
+      />
+
+      <ChatManagement
+        selectedFlow={selectedFlow}
       />
     </div>
   );

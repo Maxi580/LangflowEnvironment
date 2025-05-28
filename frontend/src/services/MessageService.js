@@ -1,78 +1,19 @@
 import config from '../config';
+import TokenRefreshService from './TokenRefreshService';
 
-/**
- * Service for handling message-related functionality with LangFlow
- */
+
 class MessageService {
-  /**
-   * Extracts the actual text message from LangFlow's complex response structure
-   * @param {Object} data - The response data from LangFlow
-   * @returns {string} - The extracted text message
-   */
-  extractBotResponse(data) {
-    try {
-      // Check for empty outputs array
-      if (data.outputs && data.outputs.length > 0) {
-        const firstOutput = data.outputs[0];
-
-        // Check if outputs is empty array
-        if (firstOutput.outputs && firstOutput.outputs.length === 0) {
-          return "No response received from LangFlow. The agent may not have generated any output.";
-        }
-
-        if (firstOutput.outputs && firstOutput.outputs.length > 0) {
-          const messageOutput = firstOutput.outputs[0];
-
-          // Try to get from messages array first
-          if (messageOutput.messages && messageOutput.messages.length > 0) {
-            return messageOutput.messages[0].message;
-          }
-
-          // Try results.message.text if messages isn't available
-          if (messageOutput.results?.message?.text) {
-            return messageOutput.results.message.text;
-          }
-
-          // Try direct message property
-          if (messageOutput.message?.message) {
-            return messageOutput.message.message;
-          }
-        }
-      }
-
-      // Fallbacks for different response structures
-      if (data.result) {
-        return data.result;
-      }
-
-      if (data.output) {
-        return data.output;
-      }
-
-      if (typeof data === 'string') {
-        return data;
-      }
-
-      // Check if we have outputs array but with empty outputs
-      if (data.outputs && data.outputs.length > 0 &&
-          data.outputs[0].outputs && data.outputs[0].outputs.length === 0) {
-        return "No response received from LangFlow. The agent may not have generated any output.";
-      }
-
-      // Last resort: stringify the response but warn the user
-      return `Response format unexpected. Please check your LangFlow configuration. Raw response: ${JSON.stringify(data).slice(0, 100)}...`;
-    } catch (err) {
-      console.error("Error extracting bot response:", err);
-      return "Failed to parse response. Please check your LangFlow configuration.";
-    }
+  constructor() {
+    this.BACKEND_BASE_URL = config.api.backendUrl;
+    this.currentSessionId = null;
   }
 
   /**
-   * Sends a message to LangFlow and processes the response
+   * Sends a message to LangFlow via the backend
    * @param {string} message - The user message to send
    * @param {string} flowId - The ID of the flow to use
-   * @param {Array} files - Array of available files
-   * @returns {Promise<Object>} - The processed response
+   * @param {Array} files - Array of available files (optional)
+   * @returns {Promise<Object>} - The bot response object
    */
   async sendMessage(message, flowId, files = []) {
     if (!message.trim()) {
@@ -80,69 +21,88 @@ class MessageService {
     }
 
     if (!flowId) {
-      throw new Error("No Flow ID set. Please select a flow first.");
+      throw new Error("Flow ID is required");
     }
 
     try {
-      const apiUrl = config.api.getRunUrl(flowId);
-
-      // Create a list of file references if files are provided
+      // Create file references if files are provided
       const fileReferences = files.length > 0
-        ? files.map(file => `${file.file_name} (${file.file_type})`).join(", ")
-        : "";
+          ? files.map(file => `${file.file_name} (${file.file_type})`).join(", ")
+          : "";
 
-      // Create a formatted input string with mention of available files
+      // Format message with file references
       const formattedMessage = fileReferences
-        ? `${message}\n\nAvailable files: ${fileReferences}`
-        : message;
+          ? `${message}\n\nAvailable files: ${fileReferences}`
+          : message;
 
-      // Get or create a session ID for conversation continuity
-      const sessionId = localStorage.getItem('langflow_session_id') || `session_${Date.now()}`;
-
-      // Store the session ID if it doesn't exist yet
-      if (!localStorage.getItem('langflow_session_id')) {
-        localStorage.setItem('langflow_session_id', sessionId);
-      }
-
+      // Prepare payload with session_id using getter
       const payload = {
-        input_value: formattedMessage,
-        output_type: 'chat',
-        input_type: 'chat',
-        session_id: sessionId
+        message: formattedMessage,
+        flow_id: flowId,
+        session_id: this.getCurrentSessionId() // Use getter method
       };
 
-      const options = {
+      const messageUrl = `${this.BACKEND_BASE_URL}/api/messages/send`;
+
+      console.log("Sending message to backend:", payload);
+
+      // Make authenticated request to backend
+      const response = await TokenRefreshService.authenticatedFetch(messageUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(payload)
-      };
-
-      // Make API call to LangFlow
-      const response = await fetch(apiUrl, options);
+      });
 
       if (!response.ok) {
-        throw new Error(`Error: ${response.status}`);
+        let errorMessage;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || `Request failed: ${response.status}`;
+        } catch (parseError) {
+          errorMessage = `Request failed: ${response.status} ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
-      console.log("LangFlow response:", data);
+      console.log("Backend response:", data);
 
-      // Extract the actual text response
-      const botResponse = this.extractBotResponse(data);
+      if (!data.success) {
+        throw new Error(data.error || "Failed to get response from LangFlow");
+      }
 
+      // Update current session ID from response using setter
+      if (data.session_id) {
+        this.setCurrentSessionId(data.session_id);
+      }
+
+      // Return formatted message object
       return {
         id: Date.now(),
-        text: botResponse,
+        text: data.response,
         sender: 'bot',
         timestamp: new Date(),
-        rawResponse: data // Include the raw response for debugging if needed
+        sessionId: data.session_id, // Include session ID in response
+        rawResponse: data.raw_response
       };
-    } catch (err) {
-      console.error('Error calling LangFlow API:', err);
-      throw err;
+
+    } catch (error) {
+      console.error('Error sending message:', error);
+      throw error;
     }
+  }
+
+  /**
+   * Creates a user message object
+   * @param {string} text - User message text
+   * @returns {Object} - User message object
+   */
+  createUserMessage(text) {
+    return {
+      id: Date.now(),
+      text,
+      sender: 'user',
+      timestamp: new Date()
+    };
   }
 
   /**
@@ -174,41 +134,28 @@ class MessageService {
   }
 
   /**
-   * Creates a user message object
-   * @param {string} text - User message text
-   * @returns {Object} - User message object
+   * Gets the current session ID
+   * @returns {string|null} - Current session ID or null
    */
-  createUserMessage(text) {
-    return {
-      id: Date.now(),
-      text,
-      sender: 'user',
-      timestamp: new Date()
-    };
+  getCurrentSessionId() {
+    return this.currentSessionId;
   }
 
   /**
-   * Generates a unique session ID
-   * @returns {string} - New session ID
+   * Sets the current session ID
+   * @param {string} sessionId - Session ID to set
    */
-  generateSessionId() {
-    return `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  setCurrentSessionId(sessionId) {
+    this.currentSessionId = sessionId;
+    console.log("Session ID set to:", sessionId);
   }
 
   /**
-   * Gets the current session ID or creates a new one
-   * @returns {string} - Session ID
+   * Clears the current session (starts a new conversation)
    */
-  getSessionId() {
-    const sessionId = localStorage.getItem('langflow_session_id');
-
-    if (!sessionId) {
-      const newSessionId = this.generateSessionId();
-      localStorage.setItem('langflow_session_id', newSessionId);
-      return newSessionId;
-    }
-
-    return sessionId;
+  clearSession() {
+    this.currentSessionId = null;
+    console.log("Session cleared - new conversation will start");
   }
 }
 

@@ -1,208 +1,280 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import messageService from '../services/MessageService';
 
 /**
  * ChatManagement component that handles all chat-related functionality
  * including message display, input handling, and API communication
  */
-const ChatManagement = ({
-  flowId,
-  messages,
-  setMessages,
-  setShowFlowSelector,
-  files = []
-}) => {
-  // State for user input
-  const [userInput, setUserInput] = React.useState('');
-  const [isLoading, setIsLoading] = React.useState(false);
+const ChatManagement = ({ selectedFlow, files = [] }) => {
+  const [messages, setMessages] = useState([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isSending, setIsSending] = useState(false);
 
-  // Refs
   const inputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
-  // Focus input when component loads or flowId changes
+  // Focus input when component loads or flow changes
   useEffect(() => {
     inputRef.current?.focus();
-  }, [flowId]);
+  }, [selectedFlow]);
 
-  // Scroll to bottom of chat when messages update
+  // Scroll to bottom when messages update
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  /**
-   * Sends a message to the LangFlow API
-   * @param {Event} e - Form submission event
-   */
-  const handleSend = async (e) => {
-    e.preventDefault();
+  // Add welcome message when flow is selected
+  useEffect(() => {
+    if (selectedFlow) {
+      // Clear session when switching flows
+      messageService.clearSession();
 
-    // Allow sending if there's text input
-    if (!userInput.trim()) return;
+      const welcomeMessage = messageService.createSystemMessage(
+        `Flow "${selectedFlow.name}" selected. New conversation started!`
+      );
+      setMessages([welcomeMessage]);
+    } else {
+      setMessages([]);
+    }
+  }, [selectedFlow]);
 
-    if (!flowId) {
-      // Add error message
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim()) return;
+
+    if (!selectedFlow) {
       const errorMessage = messageService.createErrorMessage(
-        "No Flow ID set. Please select a flow first."
+        "Please select a flow first to start chatting."
       );
       setMessages(prev => [...prev, errorMessage]);
-
-      // Show flow selector
-      if (setShowFlowSelector) {
-        setShowFlowSelector(true);
-      }
       return;
     }
 
-    const messageText = userInput.trim();
-    setUserInput('');
-
-    // Add user message to chat
-    const userMessage = messageService.createUserMessage(messageText);
-    setMessages(prev => [...prev, userMessage]);
-
-    setIsLoading(true);
-
     try {
-      // Send message to LangFlow
-      const botMessage = await messageService.sendMessage(messageText, flowId, files);
-      setMessages(prev => [...prev, botMessage]);
-    } catch (err) {
-      console.error('Error calling LangFlow API:', err);
+      setIsSending(true);
 
-      // Add error message to chat
+      // Add user message to chat
+      const userMessage = messageService.createUserMessage(inputMessage);
+      setMessages(prev => [...prev, userMessage]);
+
+      // Clear input immediately
+      const currentMessage = inputMessage;
+      setInputMessage('');
+
+      // Send to backend via MessageService
+      const botResponse = await messageService.sendMessage(
+        currentMessage,
+        selectedFlow.id,
+        files
+      );
+
+      // Add bot response to chat
+      setMessages(prev => [...prev, botResponse]);
+
+    } catch (error) {
+      console.error('Error sending message:', error);
       const errorMessage = messageService.createErrorMessage(
-        `Error: ${err.message}. Please check your Flow ID and ensure LangFlow is running.`
+        `Failed to send message: ${error.message}`
       );
       setMessages(prev => [...prev, errorMessage]);
     } finally {
-      setIsLoading(false);
+      setIsSending(false);
       // Focus back on input
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
 
-  /**
-   * Renders the message list component
-   */
-  const renderMessageList = () => {
-    if (messages.length === 0) {
-      // Empty state
-      return (
-        <div className="flex flex-col items-center justify-center h-full text-center">
-          <div className="w-16 h-16 mb-5 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-            </svg>
-          </div>
-          <h3 className="text-xl font-bold text-white mb-2">Start a conversation</h3>
-          <p className="text-slate-400 max-w-md mb-6">
-            Ask me anything and I'll respond using your LangFlow agent.
-          </p>
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
 
-          {/* Flow selector button (only show if no flowId) */}
-          {!flowId && setShowFlowSelector && (
-            <button
-              onClick={() => setShowFlowSelector(true)}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
-            >
-              Select a Flow to Begin
-            </button>
-          )}
-        </div>
+  const clearChat = () => {
+    if (selectedFlow) {
+      messageService.clearSession();
+
+      const welcomeMessage = messageService.createSystemMessage(
+        `Chat cleared. New conversation started with "${selectedFlow.name}".`
       );
+      setMessages([welcomeMessage]);
+    } else {
+      setMessages([]);
     }
-
-    // Message list
-    return (
-      <>
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-3/4 rounded-2xl px-4 py-3 ${
-                message.sender === 'user' 
-                  ? 'bg-blue-600 text-white' 
-                  : message.sender === 'error'
-                    ? 'bg-red-600 text-white'
-                    : message.sender === 'system'
-                      ? 'bg-indigo-500 text-white'
-                      : 'bg-slate-700 text-white'
-              }`}
-            >
-              <p className="whitespace-pre-wrap">{message.text}</p>
-            </div>
-          </div>
-        ))}
-
-        {/* Loading indicator */}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-slate-700 text-white rounded-2xl px-4 py-3">
-              <div className="flex space-x-2">
-                <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce"></div>
-                <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Scroll anchor */}
-        <div ref={messagesEndRef} />
-      </>
-    );
   };
 
-  /**
-   * Renders the chat input component
-   */
-  const renderChatInput = () => {
-    return (
-      <form onSubmit={handleSend} className="flex space-x-2">
-        {/* Text input */}
-        <input
-          ref={inputRef}
-          type="text"
-          value={userInput}
-          onChange={(e) => setUserInput(e.target.value)}
-          placeholder="Type your message..."
-          className="flex-1 px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg
-                   text-white placeholder-slate-400 focus:outline-none
-                   focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          disabled={isLoading}
-        />
+  const formatTimestamp = (timestamp) => {
+    return new Date(timestamp).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
-        {/* Send button */}
-        <button
-          type="submit"
-          disabled={isLoading || !userInput.trim() || !flowId}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700
-                   focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
-                   disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+  const renderMessage = (message) => {
+    const isUser = message.sender === 'user';
+    const isSystem = message.sender === 'system';
+    const isError = message.sender === 'error';
+
+    return (
+      <div
+        key={message.id}
+        className={`flex ${isUser ? 'justify-end' : isSystem || isError ? 'justify-center' : 'justify-start'}`}
+      >
+        <div
+          className={`max-w-3xl rounded-2xl px-4 py-3 ${
+            isUser
+              ? 'bg-blue-600 text-white'
+              : isSystem
+              ? 'bg-green-700 text-green-100'
+              : isError
+              ? 'bg-red-700 text-red-100'
+              : 'bg-slate-700 text-slate-200'
+          }`}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-          </svg>
-        </button>
-      </form>
+          <div className="whitespace-pre-wrap">{message.text}</div>
+          <div className={`text-xs mt-1 opacity-70 ${isUser ? 'text-right' : 'text-left'}`}>
+            {formatTimestamp(message.timestamp)}
+          </div>
+        </div>
+      </div>
     );
   };
+
+  const renderEmptyState = () => (
+    <div className="flex flex-col items-center justify-center h-full text-center">
+      <div className="w-16 h-16 mb-4 rounded-full bg-gradient-to-r from-purple-500 to-blue-600 flex items-center justify-center">
+        <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+      </div>
+      <h3 className="text-xl font-bold text-white mb-2">Ready to Chat</h3>
+      <p className="text-slate-400 max-w-md mb-4">
+        {selectedFlow
+          ? `Selected flow: "${selectedFlow.name}". Start typing to begin your conversation.`
+          : 'Please select a flow from the dropdown above to start chatting with your AI agent.'
+        }
+      </p>
+    </div>
+  );
+
+  const renderLoadingIndicator = () => (
+    <div className="flex justify-start">
+      <div className="bg-slate-700 text-slate-200 rounded-2xl px-4 py-3">
+        <div className="flex items-center space-x-2">
+          <div className="flex space-x-1">
+            <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce"></div>
+            <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+          </div>
+          <span className="text-sm">Thinking...</span>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-lg overflow-hidden flex flex-col h-[600px]">
-      {/* Messages display */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {renderMessageList()}
+    <div className="max-w-4xl mx-auto bg-slate-800 border border-slate-700 rounded-xl shadow-lg overflow-hidden">
+      {/* Chat Header */}
+      <div className="bg-slate-700 px-4 py-3 border-b border-slate-600">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-blue-600 rounded-lg">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-white font-medium">Chat Interface</h3>
+              <p className="text-slate-400 text-sm">
+                {selectedFlow ? `Using: ${selectedFlow.name}` : 'No flow selected'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            {messages.length > 0 && (
+              <button
+                onClick={clearChat}
+                className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-slate-200 rounded transition-colors text-sm"
+                title="Clear chat"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            )}
+            <div className="text-slate-400 text-sm">
+              {messages.length} messages
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Input area */}
+      {/* Messages Display */}
+      <div className="h-96 overflow-y-auto p-4 space-y-4 bg-slate-900">
+        {messages.length === 0 ? (
+          renderEmptyState()
+        ) : (
+          <>
+            {messages.map(renderMessage)}
+            {isSending && renderLoadingIndicator()}
+            <div ref={messagesEndRef} />
+          </>
+        )}
+      </div>
+
+      {/* Input Area */}
       <div className="border-t border-slate-700 p-4 bg-slate-800">
-        {renderChatInput()}
+        <div className="flex space-x-2">
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder={selectedFlow ? "Type your message..." : "Select a flow first..."}
+            className="flex-1 px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg
+                     text-white placeholder-slate-400 focus:outline-none
+                     focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            disabled={isSending || !selectedFlow}
+          />
+
+          <button
+            onClick={handleSendMessage}
+            disabled={isSending || !inputMessage.trim() || !selectedFlow}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50
+                     disabled:cursor-not-allowed text-white rounded-lg transition-colors
+                     flex items-center space-x-2"
+          >
+            {isSending ? (
+              <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            ) : (
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            )}
+            <span className="hidden sm:inline">
+              {isSending ? 'Sending...' : 'Send'}
+            </span>
+          </button>
+        </div>
+
+        {/* Info Bar */}
+        {selectedFlow && (
+          <div className="mt-2 text-xs text-slate-400 flex items-center justify-between">
+            <span>Press Enter to send • Shift+Enter for new line</span>
+            {files.length > 0 && (
+              <span>{files.length} file{files.length > 1 ? 's' : ''} available</span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

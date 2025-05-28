@@ -9,14 +9,6 @@ const config = {
     langflowUrl: LANGFLOW_API,
     backendUrl: BACKEND_API,
 
-    // LangFlow API Endpoints
-    getFlowsUrl: () => `${LANGFLOW_API}/api/v1/flows/`,
-    getFlowDeleteUrl: (flowId) => `${LANGFLOW_API}/api/v1/flows/${flowId}`,
-    getFlowUploadUrl: () => `${LANGFLOW_API}/api/v1/flows/`,
-    getRunUrl: (flowId) => `${LANGFLOW_API}/api/v1/run/${flowId}`,
-    getLangFlowLoginUrl: () => `${LANGFLOW_API}/api/v1/login`,
-
-    // Backend API Endpoints
     getBackendUrl: () => BACKEND_API,
     getFilesUrl: () => `${BACKEND_API}/api/files`,
     getUploadUrl: () => `${BACKEND_API}/api/files/upload`,
