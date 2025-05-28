@@ -80,7 +80,7 @@ const Dashboard = ({ user }) => {
 
           <div className="flex items-center space-x-2">
             <button
-              onClick={() => langflowRedirectService.redirectToLangflow("/flows")}
+              onClick={() => langflowRedirectService.redirectToLangflow("/flows", true)}
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors
                         flex items-center space-x-2"
             >

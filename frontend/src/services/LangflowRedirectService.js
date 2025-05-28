@@ -19,10 +19,8 @@ class LangflowRedirectService {
       const backendUrl = `${config.api.getBackendUrl()}/api/redirect/redirect-langflow?redirect_url=${encodeURIComponent(redirectUrl)}`;
 
       if (openInNewTab) {
-        // Open in new tab
         window.open(backendUrl, '_blank');
       } else {
-        // Redirect current window
         window.location.href = backendUrl;
       }
 

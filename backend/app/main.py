@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 from .api.routes.health import router as health_router
 from .api.routes.user import router as user_router
-from .api.routes.redirect import redirect_router as auth_router
+from .api.routes.redirect import router as redirect_router
 from .api.routes.flows import router as flow_router
 from .api.routes.message import router as message_router
 
@@ -42,7 +42,7 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(user_router)
-app.include_router(router)
+app.include_router(redirect_router)
 app.include_router(flow_router)
 app.include_router(message_router)
 

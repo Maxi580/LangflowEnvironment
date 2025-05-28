@@ -6,7 +6,7 @@ import time
 from typing import Optional
 
 LANGFLOW_EXTERNAL_URL = os.getenv("LANGFLOW_EXTERNAL_URL", "http://localhost:7860")
-redirect_router = APIRouter(prefix="/api/redirect", tags=["redirect"])
+router = APIRouter(prefix="/api/redirect", tags=["redirect"])
 
 
 def find_token_in_cookies(request: Request) -> tuple[Optional[str], Optional[str]]:
@@ -32,7 +32,7 @@ def get_token_max_age(token: str) -> int:
         return 0
 
 
-@redirect_router.get("/redirect-langflow")
+@router.get("/redirect-langflow")
 async def redirect_to_langflow(
         request: Request,
         redirect_url: Optional[str] = None
