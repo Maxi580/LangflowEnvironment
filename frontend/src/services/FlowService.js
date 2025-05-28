@@ -86,22 +86,24 @@ class FlowService {
 
       const response = await TokenRefreshService.authenticatedFetch(uploadUrl, {
         method: 'POST',
-        body: formData,
-        headers: {
-          'Accept': 'application/json'
-          // Don't set Content-Type for multipart, browser handles it
-        }
+        body: formData
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Upload failed with status: ${response.status}`);
+        let errorMessage;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || `Upload failed with status: ${response.status}`;
+        } catch (parseError) {
+          const errorText = await response.text();
+          errorMessage = `Upload failed with status: ${response.status} - ${errorText || response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
       return result;
     } catch (error) {
-      console.error('Error uploading flow file:', error);
       throw error;
     }
   }
@@ -169,166 +171,6 @@ class FlowService {
     } catch (error) {
       console.error('Error deleting multiple flows:', error);
       throw error;
-    }
-  }
-
-  /**
-   * Gets a specific flow by ID
-   * @param {string} flowId - ID of the flow to retrieve
-   * @returns {Promise<Object>} - Flow details
-   * @throws {Error} - If retrieval fails
-   */
-  async getFlowById(flowId) {
-    if (!flowId) {
-      throw new Error("Flow ID is required");
-    }
-
-    try {
-      const url = `${this.BACKEND_BASE_URL}/api/langflow/flows/${flowId}`;
-
-      const response = await TokenRefreshService.authenticatedFetch(url, {
-        method: 'GET'
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Failed to get flow with status: ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error getting flow:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Updates an existing flow
-   * @param {string} flowId - ID of the flow to update
-   * @param {Object} flowData - Updated flow data
-   * @returns {Promise<Object>} - Updated flow details
-   * @throws {Error} - If update fails
-   */
-  async updateFlow(flowId, flowData) {
-    if (!flowId) {
-      throw new Error("Flow ID is required");
-    }
-
-    if (!flowData) {
-      throw new Error("Flow data is required");
-    }
-
-    try {
-      const url = `${this.BACKEND_BASE_URL}/api/langflow/flows/${flowId}`;
-
-      const response = await TokenRefreshService.authenticatedFetch(url, {
-        method: 'PATCH',
-        body: JSON.stringify(flowData)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Update failed with status: ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error updating flow:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Downloads multiple flows as a zip file
-   * @param {Array<string>} flowIds - Array of flow IDs to download
-   * @returns {Promise<Blob>} - ZIP file blob
-   */
-  async downloadFlows(flowIds) {
-    if (!flowIds || !Array.isArray(flowIds) || flowIds.length === 0) {
-      throw new Error("Flow IDs array is required");
-    }
-
-    try {
-      const downloadUrl = `${this.BACKEND_BASE_URL}/api/langflow/flows/download`;
-
-      const response = await TokenRefreshService.authenticatedFetch(downloadUrl, {
-        method: 'POST',
-        body: JSON.stringify(flowIds)
-      });
-
-      if (!response.ok) {
-        throw new Error(`Download failed with status: ${response.status}`);
-      }
-
-      return await response.blob();
-    } catch (error) {
-      console.error('Error downloading flows:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Gets basic example flows
-   * @returns {Promise<Array>} - Array of example flows
-   */
-  async getBasicExamples() {
-    try {
-      const url = `${this.BACKEND_BASE_URL}/api/langflow/flows/basic_examples`;
-
-      const response = await TokenRefreshService.authenticatedFetch(url, {
-        method: 'GET'
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to get examples with status: ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error getting basic examples:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Reads a flow file and returns the parsed JSON
-   * @param {File} file - Flow file to read
-   * @returns {Promise<Object>} - Parsed flow data
-   * @throws {Error} - If file reading or parsing fails
-   */
-  readFlowFile(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onload = (e) => {
-        try {
-          const flowData = JSON.parse(e.target.result);
-          resolve(flowData);
-        } catch (err) {
-          reject(new Error('Invalid JSON file'));
-        }
-      };
-
-      reader.onerror = () => {
-        reject(new Error('Error reading file'));
-      };
-
-      reader.readAsText(file);
-    });
-  }
-
-  /**
-   * Utility method to check if user is authenticated before making requests
-   * @returns {Promise<boolean>} - Authentication status
-   */
-  async checkAuthentication() {
-    try {
-      // Use your existing UserService to check auth
-      const userService = await import('./UserService');
-      return await userService.default.isAuthenticated();
-    } catch (error) {
-      console.error('Error checking authentication:', error);
-      return false;
     }
   }
 }

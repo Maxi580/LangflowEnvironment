@@ -72,45 +72,50 @@ async def upload_flow(
         file: UploadFile = File(...),
         folder_id: Optional[str] = Form(None)
 ) -> Dict[str, Any]:
-    """Upload a flow file to Langflow"""
     try:
         token = get_user_token(request)
         if not token:
             raise HTTPException(status_code=401, detail="No valid Langflow access token found")
 
-        # Read file content
-        file_content = await file.read()
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No filename provided")
 
-        print(f"Uploading file: {file.filename} ({len(file_content)} bytes)")
+        if not file.filename.lower().endswith('.json'):
+            raise HTTPException(status_code=400, detail="Only JSON files are supported")
 
-        # Prepare files for multipart upload
+        try:
+            file_content = await file.read()
+            json.loads(file_content.decode('utf-8'))
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON file: {str(e)}")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
+
         files = {
             'file': (file.filename, file_content, file.content_type or 'application/json')
         }
 
-        # Prepare form data
         data = {}
         if folder_id:
             data['folder_id'] = folder_id
 
-        # Make request to Langflow
         url = f"{LANGFLOW_URL}/api/v1/flows/upload/"
         headers = {
             'Accept': 'application/json',
             'Authorization': f'Bearer {token}'
-            # Don't set Content-Type for multipart uploads
         }
 
-        print(f"Making POST request to: {url}")
-
         response = requests.post(url, headers=headers, files=files, data=data)
-
-        print(f"Langflow upload response status: {response.status_code}")
 
         if not response.ok:
             if response.status_code == 401:
                 raise HTTPException(status_code=401, detail="Langflow token expired or invalid")
-            print(f"Upload error response: {response.text}")
+            if response.status_code == 422:
+                try:
+                    error_detail = response.json()
+                    raise HTTPException(status_code=422, detail=f"Langflow validation error: {error_detail}")
+                except:
+                    raise HTTPException(status_code=422, detail=f"Langflow validation error: {response.text}")
             raise HTTPException(
                 status_code=response.status_code,
                 detail=f"Upload failed: {response.text}"
@@ -118,22 +123,17 @@ async def upload_flow(
 
         result = response.json()
 
-        # Return first flow if it's a list, otherwise return as-is
         if isinstance(result, list) and len(result) > 0:
             flow = result[0]
-            print(f"Successfully uploaded flow: {flow.get('name', 'Unknown')}")
             return flow
         else:
-            print("Successfully uploaded flow")
             return result
 
     except HTTPException:
         raise
     except requests.exceptions.RequestException as e:
-        print(f"Connection error to Langflow: {e}")
         raise HTTPException(status_code=503, detail=f"Could not connect to Langflow: {str(e)}")
     except Exception as e:
-        print(f"Error uploading flow: {e}")
         raise HTTPException(status_code=500, detail=f"Error uploading flow: {str(e)}")
 
 

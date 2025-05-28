@@ -9,6 +9,7 @@ const Dashboard = ({ user }) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedFlow, setSelectedFlow] = useState(null);
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -25,7 +26,6 @@ const Dashboard = ({ user }) => {
 
   const handleDeleteUser = async () => {
     if (!user?.userId) {
-      alert('User ID not found');
       return;
     }
 
@@ -35,25 +35,25 @@ const Dashboard = ({ user }) => {
 
       if (result.success) {
         await userService.logout();
-        alert('Account deleted successfully');
         navigate('/login', { replace: true });
       } else {
-        alert(`Failed to delete account: ${result.message}`);
       }
     } catch (error) {
-      alert(`Error deleting account: ${error.message}`);
     } finally {
       setIsDeleting(false);
       setShowDeleteModal(false);
     }
   };
 
+  const handleFlowSelect = (flow) => {
+    setSelectedFlow(flow);
+  };
+
   return (
     <div className="min-h-screen bg-slate-900">
-      {/* Header with centered title and buttons on sides */}
+      {/* Header - same as before */}
       <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
         <div className="flex items-center justify-between">
-          {/* Left side - Delete Account Button */}
           <div className="flex items-center">
             <button
               onClick={() => setShowDeleteModal(true)}
@@ -68,7 +68,6 @@ const Dashboard = ({ user }) => {
             </button>
           </div>
 
-          {/* Center - Title and Welcome Message */}
           <div className="flex flex-col items-center">
             <h1 className="text-xl font-bold text-white">Agenten Dashboard</h1>
             {user && (
@@ -78,9 +77,7 @@ const Dashboard = ({ user }) => {
             )}
           </div>
 
-          {/* Right side - Langflow and Logout Buttons */}
           <div className="flex items-center space-x-2">
-            {/* Langflow Button */}
             <button
               onClick={() => langflowRedirectService.redirectToLangflow("/flows")}
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors
@@ -93,7 +90,6 @@ const Dashboard = ({ user }) => {
               <span>Langflow</span>
             </button>
 
-            {/* Logout Button */}
             <button
               onClick={handleLogout}
               disabled={isLoggingOut}
@@ -106,13 +102,15 @@ const Dashboard = ({ user }) => {
         </div>
       </header>
 
-      {/* Main Dashboard Content */}
+      {/* Main Dashboard Content - Updated */}
       <main className="container mx-auto px-4 py-6">
-        {/* Flow Management Section */}
-        <FlowManagement />
+        {/* Flow Management Section - Pass the props */}
+        <FlowManagement
+          onFlowSelect={handleFlowSelect}
+          selectedFlowId={selectedFlow?.id}
+        />
       </main>
 
-      {/* Delete Confirmation Modal */}
       <DeleteConfirmation
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}

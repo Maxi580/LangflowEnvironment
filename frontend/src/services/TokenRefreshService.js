@@ -55,39 +55,47 @@ class TokenRefreshService {
   }
 
   /**
-   * Make authenticated request with auto-retry on 401
-   * @param {string} url - Request URL
-   * @param {Object} options - Fetch options
-   * @returns {Promise<Response>} - Fetch response
-   */
-  async authenticatedFetch(url, options = {}) {
-    let response = await fetch(url, {
-      ...options,
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        ...options.headers
-      }
-    });
+ * Make authenticated request with auto-retry on 401
+ * @param {string} url - Request URL
+ * @param {Object} options - Fetch options
+ * @returns {Promise<Response>} - Fetch response
+ */
+async authenticatedFetch(url, options = {}) {
+  // Check if we're sending FormData (for file uploads)
+  const isFormData = options.body instanceof FormData;
 
-    if (response.status === 401) {
-      const refreshSuccess = await this.performRefresh();
+  // Prepare headers - don't set Content-Type for FormData
+  const defaultHeaders = {};
+  if (!isFormData) {
+    defaultHeaders['Content-Type'] = 'application/json';
+  }
+  defaultHeaders['Accept'] = 'application/json';
 
-      if (refreshSuccess) {
-        response = await fetch(url, {
-          ...options,
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            ...options.headers
-          }
-        });
-      }
+  let response = await fetch(url, {
+    ...options,
+    credentials: 'include',
+    headers: {
+      ...defaultHeaders,
+      ...options.headers
     }
+  });
 
-    return response;
+  if (response.status === 401) {
+    const refreshSuccess = await this.performRefresh();
+
+    if (refreshSuccess) {
+      response = await fetch(url, {
+        ...options,
+        credentials: 'include',
+        headers: {
+          ...defaultHeaders,
+          ...options.headers
+        }
+      });
+    }
+  }
+
+  return response;
   }
 }
 
