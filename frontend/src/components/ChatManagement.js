@@ -84,9 +84,15 @@ const ChatManagement = ({ selectedFlow, files = [] }) => {
   };
 
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
+    if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        // Shift+Enter: Allow new line (default textarea behavior)
+        return;
+      } else {
+        // Enter alone: Send message
+        e.preventDefault();
+        handleSendMessage();
+      }
     }
   };
 
@@ -121,7 +127,7 @@ const ChatManagement = ({ selectedFlow, files = [] }) => {
         className={`flex ${isUser ? 'justify-end' : isSystem || isError ? 'justify-center' : 'justify-start'}`}
       >
         <div
-          className={`max-w-3xl rounded-2xl px-4 py-3 ${
+          className={`max-w-3xl rounded-2xl px-4 py-3 break-words ${
             isUser
               ? 'bg-blue-600 text-white'
               : isSystem
@@ -131,7 +137,12 @@ const ChatManagement = ({ selectedFlow, files = [] }) => {
               : 'bg-slate-700 text-slate-200'
           }`}
         >
-          <div className="whitespace-pre-wrap">{message.text}</div>
+          <div
+            className="whitespace-pre-wrap break-words overflow-wrap-anywhere"
+            style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+          >
+            {message.text}
+          </div>
           <div className={`text-xs mt-1 opacity-70 ${isUser ? 'text-right' : 'text-left'}`}>
             {formatTimestamp(message.timestamp)}
           </div>
@@ -229,17 +240,27 @@ const ChatManagement = ({ selectedFlow, files = [] }) => {
       {/* Input Area */}
       <div className="border-t border-slate-700 p-4 bg-slate-800">
         <div className="flex space-x-2">
-          <input
+          <textarea
             ref={inputRef}
-            type="text"
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder={selectedFlow ? "Type your message..." : "Select a flow first..."}
+            onKeyDown={handleKeyPress}
+            placeholder={selectedFlow ? "Type your message... (Shift+Enter for new line)" : "Select a flow first..."}
             className="flex-1 px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg
                      text-white placeholder-slate-400 focus:outline-none
-                     focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                     focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+                     resize-none min-h-[40px] max-h-32 overflow-y-auto"
             disabled={isSending || !selectedFlow}
+            rows={1}
+            style={{
+              height: 'auto',
+              minHeight: '40px'
+            }}
+            onInput={(e) => {
+              // Auto-resize textarea based on content
+              e.target.style.height = 'auto';
+              e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px';
+            }}
           />
 
           <button
@@ -247,7 +268,7 @@ const ChatManagement = ({ selectedFlow, files = [] }) => {
             disabled={isSending || !inputMessage.trim() || !selectedFlow}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50
                      disabled:cursor-not-allowed text-white rounded-lg transition-colors
-                     flex items-center space-x-2"
+                     flex items-center space-x-2 self-end"
           >
             {isSending ? (
               <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
@@ -269,7 +290,7 @@ const ChatManagement = ({ selectedFlow, files = [] }) => {
         {/* Info Bar */}
         {selectedFlow && (
           <div className="mt-2 text-xs text-slate-400 flex items-center justify-between">
-            <span>Press Enter to send • Shift+Enter for new line</span>
+            <span>Enter to send • Shift+Enter for new line</span>
             {files.length > 0 && (
               <span>{files.length} file{files.length > 1 ? 's' : ''} available</span>
             )}
