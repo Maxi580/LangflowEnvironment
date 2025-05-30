@@ -16,7 +16,7 @@ class LangflowRedirectService {
   async redirectToLangflow(targetPath = '/', openInNewTab = false) {
     try {
       const redirectUrl = `${this.LANGFLOW_EXTERNAL_URL}${targetPath}`;
-      const backendUrl = `${config.api.getBackendUrl()}/api/redirect/redirect-langflow?redirect_url=${encodeURIComponent(redirectUrl)}`;
+      const backendUrl = `${config.api.getRedirectLangflowUrl()}?redirect_url=${encodeURIComponent(redirectUrl)}`;
 
       if (openInNewTab) {
         window.open(backendUrl, '_blank');

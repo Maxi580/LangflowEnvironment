@@ -18,7 +18,7 @@ class UserService {
     this.validateCredentials(credentials);
 
     try {
-      const response = await fetch(`${config.api.getBackendUrl()}/api/users/login`, {
+      const response = await fetch(config.api.getUsersLoginUrl(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -68,7 +68,7 @@ class UserService {
     this.validateCredentials(userData);
 
     try {
-      const response = await fetch(`${config.api.getBackendUrl()}/api/users`, {
+      const response = await fetch(config.api.getUsersBaseUrl(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -120,7 +120,7 @@ class UserService {
 
     try {
       const response = await TokenRefreshService.authenticatedFetch(
-        `${config.api.getBackendUrl()}/api/users/${userId}`,
+        config.api.getUserDeleteUrl(userId),
         {
           method: 'DELETE'
         }
@@ -165,7 +165,7 @@ class UserService {
    */
   async logout() {
     try {
-      const response = await fetch(`${config.api.getBackendUrl()}/api/users/logout`, {
+      const response = await fetch(config.api.getUsersLogoutUrl(), {
         method: 'POST',
         credentials: 'include'
       });
@@ -217,7 +217,7 @@ class UserService {
    */
   async isAuthenticated() {
     try {
-      const response = await fetch(`${config.api.getBackendUrl()}/api/users/verify-auth`, {
+      const response = await fetch(config.api.getUsersVerifyAuthUrl(), {
         credentials: 'include'
       });
 
@@ -240,7 +240,7 @@ class UserService {
    */
   async getAuthStatus() {
     try {
-      const response = await fetch(`${config.api.getBackendUrl()}/api/users/auth-status`, {
+      const response = await fetch(config.api.getUsersAuthStatusUrl(), {
         credentials: 'include'
       });
 

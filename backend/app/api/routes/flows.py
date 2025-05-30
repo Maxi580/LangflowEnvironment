@@ -7,10 +7,13 @@ from typing import Dict, Any, Optional, List
 
 from ..utils.jwt_helper import get_user_token
 
-LANGFLOW_URL = os.getenv("LANGFLOW_INTERNAL_URL", "http://langflow:7860")
+LANGFLOW_URL = os.getenv("LANGFLOW_INTERNAL_URL")
+LF_FLOWS_BASE_ENDPOINT = os.getenv("LF_FLOWS_BASE_ENDPOINT")
+LF_FLOWS_UPLOAD_ENDPOINT = os.getenv("LF_FLOWS_UPLOAD_ENDPOINT")
+FLOWS_BASE_ENDPOINT = os.getenv("FLOWS_BASE_ENDPOINT")
+FLOWS_UPLOAD_ENDPOINT = os.getenv("FLOWS_UPLOAD_ENDPOINT")
 
-# Changed from "/api/langflow" to "/api/flows"
-router = APIRouter(prefix="/api/flows", tags=["flows"])
+router = APIRouter(prefix=FLOWS_BASE_ENDPOINT, tags=["flows"])
 
 
 @router.get("")
@@ -31,7 +34,7 @@ async def get_flows(
             'header_flows': str(header_flows).lower()
         }
 
-        url = f"{LANGFLOW_URL}/api/v1/flows/"
+        url = f"{LANGFLOW_URL}{LF_FLOWS_BASE_ENDPOINT}"
         headers = {
             'Accept': 'application/json',
             'Authorization': f'Bearer {token}'
@@ -67,7 +70,7 @@ async def get_flows(
         raise HTTPException(status_code=500, detail=f"Error getting flows: {str(e)}")
 
 
-@router.post("/upload")
+@router.post(FLOWS_UPLOAD_ENDPOINT)
 async def upload_flow(
         request: Request,
         file: UploadFile = File(...),
@@ -103,7 +106,7 @@ async def upload_flow(
         if folder_id:
             data['folder_id'] = folder_id
 
-        url = f"{LANGFLOW_URL}/api/v1/flows/upload/"
+        url = f"{LANGFLOW_URL}{LF_FLOWS_UPLOAD_ENDPOINT}"
         headers = {
             'Accept': 'application/json',
             'Authorization': f'Bearer {token}'
@@ -158,8 +161,7 @@ async def delete_flow(request: Request, flow_id: str) -> Dict[str, Any]:
         if not token:
             raise HTTPException(status_code=401, detail="No valid Langflow access token found")
 
-        # Make request to Langflow
-        url = f"{LANGFLOW_URL}/api/v1/flows/{flow_id}"
+        url = f"{LANGFLOW_URL}{LF_FLOWS_BASE_ENDPOINT.rstrip('/')}/{flow_id}"
         headers = {
             'Accept': 'application/json',
             'Authorization': f'Bearer {token}'
@@ -184,7 +186,6 @@ async def delete_flow(request: Request, flow_id: str) -> Dict[str, Any]:
 
         print(f"Successfully deleted flow: {flow_id}")
 
-        # Try to parse JSON response, fallback to success message
         try:
             result = response.json()
             return result
@@ -219,7 +220,7 @@ async def delete_multiple_flows(
         if not flow_ids:
             raise HTTPException(status_code=400, detail="No flow IDs provided")
 
-        url = f"{LANGFLOW_URL}/api/v1/flows/"
+        url = f"{LANGFLOW_URL}{LF_FLOWS_BASE_ENDPOINT}"
         headers = {
             'Accept': 'application/json',
             'Content-Type': 'application/json',

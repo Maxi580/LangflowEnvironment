@@ -6,13 +6,24 @@ import time
 import jwt
 from typing import Dict, Any, Optional, Tuple
 from pydantic import BaseModel
+from ..utils.jwt_helper import get_token_expiry
 
-LANGFLOW_URL = os.getenv("LANGFLOW_INTERNAL_URL", "http://langflow:7860")
+LANGFLOW_URL = os.getenv("LANGFLOW_INTERNAL_URL")
 SUPERUSER_USERNAME = os.getenv("BACKEND_LF_USERNAME")
 SUPERUSER_PASSWORD = os.getenv("BACKEND_LF_PASSWORD")
 TOKEN_EXPIRY_BUFFER = 300
+LF_AUTH_LOGIN_ENDPOINT = os.getenv("LF_AUTH_LOGIN_ENDPOINT")
+LF_AUTH_REFRESH_ENDPOINT = os.getenv("LF_AUTH_REFRESH_ENDPOINT")
+LF_AUTH_LOGOUT_ENDPOINT = os.getenv("LF_AUTH_LOGOUT_ENDPOINT")
+LF_USERS_BASE_ENDPOINT = os.getenv("LF_USERS_BASE_ENDPOINT")
+USERS_BASE_ENDPOINT = os.getenv("USERS_BASE_ENDPOINT")
+USERS_LOGIN_ENDPOINT = os.getenv("USERS_LOGIN_ENDPOINT")
+USERS_REFRESH_TOKEN_ENDPOINT = os.getenv("USERS_REFRESH_TOKEN_ENDPOINT")
+USERS_LOGOUT_ENDPOINT = os.getenv("USERS_LOGOUT_ENDPOINT")
+USERS_VERIFY_AUTH_ENDPOINT = os.getenv("USERS_VERIFY_AUTH_ENDPOINT")
+USERS_AUTH_STATUS_ENDPOINT = os.getenv("USERS_AUTH_STATUS_ENDPOINT")
 
-router = APIRouter(prefix="/api/users", tags=["users"])
+router = APIRouter(prefix=USERS_BASE_ENDPOINT, tags=["users"])
 
 token_cache = {
     "token": Optional[str],
@@ -25,15 +36,6 @@ class UserCreate(BaseModel):
     password: str
 
 
-def get_token_expiry(token: str) -> int:
-    try:
-        decoded = jwt.decode(token, options={"verify_signature": False})
-        return decoded.get("exp", 0)
-    except Exception as e:
-        print(f"Error decoding token: {e}")
-        return 0
-
-
 def get_admin_token() -> str:
     global token_cache
     current_time = time.time()
@@ -42,11 +44,11 @@ def get_admin_token() -> str:
             token_cache["expiry"] > current_time + TOKEN_EXPIRY_BUFFER):
         return token_cache["token"]
 
-    login_url = f"{LANGFLOW_URL}/api/v1/login"
+    login_url = f"{LANGFLOW_URL}{LF_AUTH_LOGIN_ENDPOINT}"
 
     payload = {
-        "username": "admin",
-        "password": "admin",
+        "username": SUPERUSER_USERNAME,
+        "password": SUPERUSER_PASSWORD,
         "grant_type": "password"
     }
 
@@ -83,7 +85,6 @@ async def create_user(user: UserCreate) -> Dict[str, Any]:
     """Create a new user in Langflow"""
     try:
         admin_token = get_admin_token()
-        print("Admin Token is: ", admin_token)
 
         headers = {
             'Content-Type': 'application/json',
@@ -91,7 +92,7 @@ async def create_user(user: UserCreate) -> Dict[str, Any]:
             'Authorization': f'Bearer {admin_token}'
         }
 
-        create_url = f"{LANGFLOW_URL}/api/v1/users/"
+        create_url = f"{LANGFLOW_URL}{LF_USERS_BASE_ENDPOINT}"
         create_payload = json.dumps({
             "username": user.username,
             "password": user.password
@@ -116,7 +117,7 @@ async def create_user(user: UserCreate) -> Dict[str, Any]:
                 "user_data": user_data
             }
 
-        patch_url = f"{LANGFLOW_URL}/api/v1/users/{user_id}"
+        patch_url = f"{LANGFLOW_URL}{LF_USERS_BASE_ENDPOINT.rstrip('/')}/{user_id}"
         patch_payload = json.dumps({
             "is_active": True,
             "is_superuser": False
@@ -146,14 +147,14 @@ async def create_user(user: UserCreate) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Error creating user: {str(e)}")
 
 
-@router.post("/login")
+@router.post(USERS_LOGIN_ENDPOINT)
 async def login(
         user: UserCreate,
         request: Request,
         response: Response
 ) -> Dict[str, Any]:
     try:
-        login_url = f"{LANGFLOW_URL}/api/v1/login"
+        login_url = f"{LANGFLOW_URL}{LF_AUTH_LOGIN_ENDPOINT}"
 
         payload = {
             "username": user.username,
@@ -287,7 +288,7 @@ async def login(
         )
 
 
-@router.post("/refresh-token")
+@router.post(USERS_REFRESH_TOKEN_ENDPOINT)
 async def refresh_token(request: Request, response: Response) -> Dict[str, Any]:
     """
     Refresh access token using httpOnly refresh token
@@ -304,7 +305,7 @@ async def refresh_token(request: Request, response: Response) -> Dict[str, Any]:
                 "should_login": True
             }
 
-        refresh_url = f"{LANGFLOW_URL}/api/v1/refresh"
+        refresh_url = f"{LANGFLOW_URL}{LF_AUTH_REFRESH_ENDPOINT}"
 
         headers = {
             'Content-Type': 'application/json',
@@ -411,7 +412,7 @@ async def refresh_token(request: Request, response: Response) -> Dict[str, Any]:
         }
 
 
-@router.post("/logout")
+@router.post(USERS_LOGOUT_ENDPOINT)
 async def logout(request: Request, response: Response) -> Dict[str, Any]:
     """
     Logout user by calling Langflow logout endpoint and deleting ALL cookies
@@ -425,7 +426,7 @@ async def logout(request: Request, response: Response) -> Dict[str, Any]:
         # Call Langflow logout endpoint first
         if access_token:
             try:
-                logout_url = f"{LANGFLOW_URL}/api/v1/logout"
+                logout_url = f"{LANGFLOW_URL}{LF_AUTH_LOGOUT_ENDPOINT}"
                 payload = {}
                 headers = {
                     'Accept': 'application/json',
@@ -474,7 +475,7 @@ async def logout(request: Request, response: Response) -> Dict[str, Any]:
         }
 
 
-@router.get("/verify-auth")
+@router.get(USERS_VERIFY_AUTH_ENDPOINT)
 async def verify_auth(request: Request) -> Dict[str, Any]:
     try:
         port = str(request.url.port or (443 if request.url.scheme == "https" else 80))
@@ -524,7 +525,7 @@ async def verify_auth(request: Request) -> Dict[str, Any]:
         }
 
 
-@router.get("/auth-status")
+@router.get(USERS_AUTH_STATUS_ENDPOINT)
 async def get_auth_status(request: Request) -> Dict[str, Any]:
     try:
         port = str(request.url.port or (443 if request.url.scheme == "https" else 80))
@@ -619,7 +620,7 @@ async def delete_user(user_id: str) -> Dict[str, Any]:
             'Authorization': f'Bearer {admin_token}'
         }
 
-        delete_url = f"{LANGFLOW_URL}/api/v1/users/{user_id}"
+        delete_url = f"{LANGFLOW_URL}{LF_USERS_BASE_ENDPOINT.rstrip('/')}/{user_id}"
         delete_response = requests.delete(delete_url, headers=headers)
 
         if delete_response.status_code not in (200, 204):

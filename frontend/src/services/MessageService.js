@@ -75,7 +75,7 @@ class MessageService {
 
       // Send to backend (which handles all API key management)
       const response = await TokenRefreshService.authenticatedFetch(
-        `${this.BACKEND_BASE_URL}/api/messages/send`,
+        config.api.getMessagesSendUrl(),
         {
           method: 'POST',
           headers: {
@@ -146,7 +146,7 @@ class MessageService {
   async getSessionInfo(sessionId) {
     try {
       const response = await TokenRefreshService.authenticatedFetch(
-        `${this.BACKEND_BASE_URL}/api/messages/session/${sessionId}`,
+        config.api.getMessagesSessionUrl(sessionId),
         { credentials: 'include' }
       );
 
@@ -209,7 +209,7 @@ class MessageService {
   async testConnection() {
     try {
       const response = await TokenRefreshService.authenticatedFetch(
-        `${this.BACKEND_BASE_URL}/api/messages/session/test`,
+        config.api.getMessagesSessionUrl('test'),
         { credentials: 'include' }
       );
 

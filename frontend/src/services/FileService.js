@@ -145,8 +145,8 @@ class FileService {
     try {
       // Pass the current flow ID as a query parameter if available
       const url = flowId
-        ? `${config.api.getStatusUrl()}?flow_id=${encodeURIComponent(flowId)}`
-        : config.api.getStatusUrl();
+        ? `${config.api.getHealthUrl()}?flow_id=${encodeURIComponent(flowId)}`
+        : config.api.getHealthUrl();
 
       const response = await fetch(url);
 

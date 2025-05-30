@@ -4,10 +4,14 @@ from ..utils.connection import check_langflow_connection, check_qdrant_connectio
 from typing import Dict, Any
 import os
 
-OLLAMA_URL = os.getenv("INTERNAL_OLLAMA_URL", "http://ollama:11434")
-QDRANT_URL = os.getenv("INTERNAL_QDRANT_URL", "http://qdrant:6333")
+OLLAMA_URL = os.getenv("INTERNAL_OLLAMA_URL")
+QDRANT_URL = os.getenv("INTERNAL_QDRANT_URL")
+HEALTH_BASE_ENDPOINT = os.getenv("HEALTH_BASE_ENDPOINT")
+HEALTH_OLLAMA_ENDPOINT = os.getenv("HEALTH_OLLAMA_ENDPOINT")
+HEALTH_QDRANT_ENDPOINT = os.getenv("HEALTH_QDRANT_ENDPOINT")
+HEALTH_LANGFLOW_ENDPOINT = os.getenv("HEALTH_LANGFLOW_ENDPOINT")
 
-router = APIRouter(prefix="/health", tags=["health"])
+router = APIRouter(prefix=HEALTH_BASE_ENDPOINT, tags=["health"])
 
 
 @router.get("")
@@ -31,7 +35,7 @@ async def health_check() -> Dict[str, Any]:
     }
 
 
-@router.get("/ollama")
+@router.get(HEALTH_OLLAMA_ENDPOINT)
 async def check_ollama() -> Dict[str, Any]:
     """Check if Ollama service is running"""
     is_connected = check_ollama_connection()
@@ -40,7 +44,7 @@ async def check_ollama() -> Dict[str, Any]:
     return {"status": "connected", "service": "ollama"}
 
 
-@router.get("/qdrant")
+@router.get(HEALTH_QDRANT_ENDPOINT)
 async def check_qdrant() -> Dict[str, Any]:
     """Check if Qdrant service is running"""
     is_connected = check_qdrant_connection()
@@ -49,7 +53,7 @@ async def check_qdrant() -> Dict[str, Any]:
     return {"status": "connected", "service": "qdrant"}
 
 
-@router.get("/langflow")
+@router.get(HEALTH_LANGFLOW_ENDPOINT)
 async def check_langflow() -> Dict[str, Any]:
     """Check if Langflow service is running"""
     is_connected = check_langflow_connection()

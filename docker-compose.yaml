@@ -1,10 +1,6 @@
 version: '3.8'
 
 services:
-  # ============================================================
-  # APPLICATION SERVICES (Internal only)
-  # ============================================================
-
   frontend:
     build:
       context: ./frontend
@@ -15,16 +11,8 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
-    environment:
-      - REACT_APP_BACKEND_API=${REACT_APP_BACKEND_API}
-      - REACT_APP_LANGFLOW_API=${REACT_APP_LANGFLOW_API}
-      - NODE_ENV=${NODE_ENV}
-      - WDS_SOCKET_HOST=${WDS_SOCKET_HOST}
-      - CHOKIDAR_USEPOLLING=${CHOKIDAR_USEPOLLING}
-      - FAST_REFRESH=${FAST_REFRESH}
-      - BROWSER=${BROWSER}
-      - REACT_APP_VERSION=${REACT_APP_VERSION}
-      - REACT_APP_DEFAULT_FLOW_ID=${REACT_APP_DEFAULT_FLOW_ID}
+    env_file:
+      - .env
     restart: unless-stopped
     networks:
       - app-network
@@ -40,20 +28,8 @@ services:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     volumes:
       - backend_data:${BACKEND_UPLOAD_DIR}
-    environment:
-      # Server config
-      - SERVER_HOST=${BACKEND_HOST}
-      - SERVER_PORT=${BACKEND_PORT}
-      # Use auto-generated URLs
-      - LANGFLOW_EXTERNAL_URL=${LANGFLOW_URL}
-      - LANGFLOW_INTERNAL_URL=${LANGFLOW_INTERNAL_URL}
-      # Auth config
-      - BACKEND_LF_USERNAME=${BACKEND_LF_USERNAME}
-      - BACKEND_LF_PASSWORD=${BACKEND_LF_PASSWORD}
-      # Other config
-      - BACKEND_LOG_LEVEL=${BACKEND_LOG_LEVEL}
-      - BACKEND_ALLOW_ORIGINS=${BACKEND_ALLOW_ORIGINS}
-      - BACKEND_MAX_FILE_SIZE=${BACKEND_MAX_FILE_SIZE}
+    env_file:
+      - .env
     restart: unless-stopped
     networks:
       - app-network
@@ -61,7 +37,7 @@ services:
       - langflow
       - postgres
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -75,29 +51,8 @@ services:
       - "${LANGFLOW_PORT}:${LANGFLOW_PORT}"
     volumes:
       - langflow_data:/root/.langflow
-    environment:
-      # Server config
-      - LANGFLOW_HOST=${LANGFLOW_HOST}
-      - LANGFLOW_PORT=${LANGFLOW_PORT}
-      # Database (auto-generated URL)
-      - LANGFLOW_DATABASE_URL=${LANGFLOW_DATABASE_URL}
-      # Application config
-      - LANGFLOW_AUTO_RELOAD=${LANGFLOW_AUTO_RELOAD}
-      - LANGFLOW_DEV=${LANGFLOW_DEV}
-      - LANGFLOW_CACHE=${LANGFLOW_CACHE}
-      - LANGFLOW_ALLOWED_ORIGINS=${LANGFLOW_ALLOWED_ORIGINS}
-      - LANGFLOW_REMOVE_EXAMPLE_FLOWS=${LANGFLOW_REMOVE_EXAMPLE_FLOWS}
-      - DO_NOT_TRACK=${DO_NOT_TRACK}
-      - LANGFLOW_STORE_ENVIRONMENT_VARIABLES=${LANGFLOW_STORE_ENVIRONMENT_VARIABLES}
-      - LANGFLOW_AUTO_MIGRATE=${LANGFLOW_AUTO_MIGRATE}
-      # Authentication
-      - LANGFLOW_SUPERUSER=${LANGFLOW_SUPERUSER}
-      - LANGFLOW_SUPERUSER_PASSWORD=${LANGFLOW_SUPERUSER_PASSWORD}
-      - LANGFLOW_SECRET_KEY=${LANGFLOW_SECRET_KEY}
-      - LANGFLOW_AUTO_LOGIN=${LANGFLOW_AUTO_LOGIN}
-      - LANGFLOW_AUTO_APPROVE_USERS=${LANGFLOW_AUTO_APPROVE_USERS}
-      - LANGFLOW_DISABLE_TOKEN_GENERATION=${LANGFLOW_DISABLE_TOKEN_GENERATION}
-      - LANGFLOW_ALLOW_USER_REGISTRATION=${LANGFLOW_ALLOW_USER_REGISTRATION}
+    env_file:
+      - .env
     restart: unless-stopped
     networks:
       - app-network
@@ -110,10 +65,6 @@ services:
       timeout: 10s
       retries: 3
 
-  # ============================================================
-  # DATABASE SERVICES
-  # ============================================================
-
   postgres:
     image: postgres:15-alpine
     container_name: ${POSTGRES_CONTAINER_NAME}
@@ -122,10 +73,8 @@ services:
       - "${POSTGRES_PORT}:${POSTGRES_PORT}"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+    env_file:
+      - .env
     restart: unless-stopped
     networks:
       - app-network
@@ -135,15 +84,13 @@ services:
       timeout: 5s
       retries: 5
 
-  # ============================================================
-  # ADMIN TOOLS (Optional)
-  # ============================================================
-
   adminer:
     image: adminer
     container_name: ${ADMINER_CONTAINER_NAME}
     ports:
       - "${ADMINER_PORT}:8080"
+    env_file:
+      - .env
     environment:
       - ADMINER_DEFAULT_SERVER=${POSTGRES_HOST}
       - ADMINER_DESIGN=flat
@@ -153,9 +100,6 @@ services:
     depends_on:
       - postgres
 
-# ============================================================
-# VOLUMES
-# ============================================================
 volumes:
   langflow_data:
     driver: local
@@ -164,9 +108,6 @@ volumes:
   postgres_data:
     driver: local
 
-# ============================================================
-# NETWORKS
-# ============================================================
 networks:
   app-network:
     driver: bridge

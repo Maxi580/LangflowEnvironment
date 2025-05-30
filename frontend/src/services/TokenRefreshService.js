@@ -36,7 +36,7 @@ class TokenRefreshService {
    */
   async executeRefresh() {
     try {
-      const response = await fetch(`${config.api.getBackendUrl()}/api/users/refresh-token`, {
+      const response = await fetch(config.api.getUsersRefreshTokenUrl(), {
         method: 'POST',
         credentials: 'include'
       });

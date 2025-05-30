@@ -36,7 +36,7 @@ class FlowService {
         queryParams.append('folder_id', folderId);
       }
 
-      const flowsUrl = `${this.BACKEND_BASE_URL}/api/flows?${queryParams.toString()}`;
+      const flowsUrl = `${config.api.getFlowsBaseUrl()}?${queryParams.toString()}`;
 
       const response = await TokenRefreshService.authenticatedFetch(flowsUrl, {
         method: 'GET'
@@ -81,7 +81,7 @@ class FlowService {
         formData.append('folder_id', folderId);
       }
 
-      const uploadUrl = `${this.BACKEND_BASE_URL}/api/flows/upload`;
+      const uploadUrl = config.api.getFlowsUploadUrl();
 
       const response = await TokenRefreshService.authenticatedFetch(uploadUrl, {
         method: 'POST',
@@ -119,8 +119,7 @@ class FlowService {
     }
 
     try {
-      // Updated to use the new /api/flows/{flowId} endpoint
-      const deleteUrl = `${this.BACKEND_BASE_URL}/api/flows/${flowId}`;
+      const deleteUrl = config.api.getFlowDeleteUrl(flowId);
 
       const response = await TokenRefreshService.authenticatedFetch(deleteUrl, {
         method: 'DELETE'
@@ -155,7 +154,7 @@ class FlowService {
     }
 
     try {
-      const deleteUrl = `${this.BACKEND_BASE_URL}/api/flows`;
+      const deleteUrl = config.api.getFlowsBaseUrl();
 
       const response = await TokenRefreshService.authenticatedFetch(deleteUrl, {
         method: 'DELETE',
