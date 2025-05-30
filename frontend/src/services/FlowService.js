@@ -25,9 +25,8 @@ class FlowService {
     folderId = null
   } = {}) {
     try {
-      // Build query parameters
       const queryParams = new URLSearchParams({
-        get_all: 'true', // Required for backward compatibility
+        get_all: 'true',
         remove_example_flows: removeExampleFlows.toString(),
         components_only: componentsOnly.toString(),
         header_flows: headerFlows.toString()
@@ -37,7 +36,7 @@ class FlowService {
         queryParams.append('folder_id', folderId);
       }
 
-      const flowsUrl = `${this.BACKEND_BASE_URL}/api/langflow/flows?${queryParams.toString()}`;
+      const flowsUrl = `${this.BACKEND_BASE_URL}/api/flows?${queryParams.toString()}`;
 
       const response = await TokenRefreshService.authenticatedFetch(flowsUrl, {
         method: 'GET'
@@ -82,7 +81,7 @@ class FlowService {
         formData.append('folder_id', folderId);
       }
 
-      const uploadUrl = `${this.BACKEND_BASE_URL}/api/langflow/flows/upload`;
+      const uploadUrl = `${this.BACKEND_BASE_URL}/api/flows/upload`;
 
       const response = await TokenRefreshService.authenticatedFetch(uploadUrl, {
         method: 'POST',
@@ -120,7 +119,8 @@ class FlowService {
     }
 
     try {
-      const deleteUrl = `${this.BACKEND_BASE_URL}/api/langflow/flows/${flowId}`;
+      // Updated to use the new /api/flows/{flowId} endpoint
+      const deleteUrl = `${this.BACKEND_BASE_URL}/api/flows/${flowId}`;
 
       const response = await TokenRefreshService.authenticatedFetch(deleteUrl, {
         method: 'DELETE'
@@ -155,7 +155,7 @@ class FlowService {
     }
 
     try {
-      const deleteUrl = `${this.BACKEND_BASE_URL}/api/langflow/flows`;
+      const deleteUrl = `${this.BACKEND_BASE_URL}/api/flows`;
 
       const response = await TokenRefreshService.authenticatedFetch(deleteUrl, {
         method: 'DELETE',

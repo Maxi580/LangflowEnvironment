@@ -414,7 +414,7 @@ async def refresh_token(request: Request, response: Response) -> Dict[str, Any]:
 @router.post("/logout")
 async def logout(request: Request, response: Response) -> Dict[str, Any]:
     """
-    Logout user by calling Langflow logout endpoint and clearing ALL cookies
+    Logout user by calling Langflow logout endpoint and deleting ALL cookies
     """
     try:
         port = str(request.url.port or (443 if request.url.scheme == "https" else 80))
@@ -449,22 +449,19 @@ async def logout(request: Request, response: Response) -> Dict[str, Any]:
         cookies_cleared = []
 
         for cookie_name in all_cookies.keys():
-            response.set_cookie(
+            response.delete_cookie(
                 key=cookie_name,
-                value="",
-                httponly=True,
+                path="/",
                 secure=request.url.scheme == "https",
-                samesite="strict",
-                max_age=0,
-                path="/"
+                samesite="strict"
             )
             cookies_cleared.append(cookie_name)
 
-        print(f"Cleared {len(cookies_cleared)} cookies: {cookies_cleared}")
+        print(f"Deleted {len(cookies_cleared)} cookies: {cookies_cleared}")
 
         return {
             "success": True,
-            "message": f"Logout completed - cleared {len(cookies_cleared)} cookies",
+            "message": f"Logout completed - deleted {len(cookies_cleared)} cookies",
             "langflow_logout": langflow_logout_success,
             "cookies_cleared": len(cookies_cleared)
         }

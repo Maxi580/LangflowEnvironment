@@ -7,7 +7,7 @@ import os
 OLLAMA_URL = os.getenv("INTERNAL_OLLAMA_URL", "http://ollama:11434")
 QDRANT_URL = os.getenv("INTERNAL_QDRANT_URL", "http://qdrant:6333")
 
-router = APIRouter(prefix="/api/health", tags=["health"])
+router = APIRouter(prefix="/health", tags=["health"])
 
 
 @router.get("")

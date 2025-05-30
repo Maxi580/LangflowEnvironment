@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional
 from pydantic import BaseModel
 
 from ..utils.jwt_helper import get_user_token
+from ..utils.api_key import TemporaryApiKey, create_api_key_headers
 
 LANGFLOW_URL = os.getenv("LANGFLOW_INTERNAL_URL", "http://langflow:7860")
 
@@ -77,9 +78,10 @@ async def send_message(
         message_request: MessageRequest
 ) -> MessageResponse:
     try:
-        token = get_user_token(request)
-        if not token:
-            raise HTTPException(status_code=401, detail="No valid Langflow access token found")
+        # Get user token for API key creation
+        user_token = get_user_token(request)
+        if not user_token:
+            raise HTTPException(status_code=401, detail="No valid authentication token found")
 
         if not message_request.message.strip():
             raise HTTPException(status_code=400, detail="Message cannot be empty")
@@ -96,36 +98,38 @@ async def send_message(
             "session_id": session_id
         }
 
-        url = f"{LANGFLOW_URL}/api/v1/run/{message_request.flow_id}"
-        headers = {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': f'Bearer {token}',
-        }
+        print(f"Processing message request - Flow: {message_request.flow_id}, Session: {session_id}")
 
-        print(f"Sending message to LangFlow: {url}")
-        print(f"Payload: {json.dumps(payload, indent=2)}")
+        # Use temporary API key to make request to Langflow
+        with TemporaryApiKey(user_token) as api_key:
+            url = f"{LANGFLOW_URL}/api/v1/run/{message_request.flow_id}"
+            headers = create_api_key_headers(api_key)
 
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
+            print(f"Sending message to LangFlow: {url}")
+            print(f"Using x-api-key header")
+            print(f"Payload: {json.dumps(payload, indent=2)}")
 
-        print(f"LangFlow response status: {response.status_code}")
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
 
-        if not response.ok:
-            if response.status_code == 401:
-                raise HTTPException(status_code=401, detail="Langflow token expired or invalid")
-            if response.status_code == 404:
-                raise HTTPException(status_code=404, detail="Flow not found")
+            print(f"LangFlow response status: {response.status_code}")
 
-            error_text = response.text
-            print(f"LangFlow error response: {error_text}")
-            raise HTTPException(
-                status_code=response.status_code,
-                detail=f"LangFlow error: {error_text}"
-            )
+            if not response.ok:
+                if response.status_code == 401:
+                    raise HTTPException(status_code=401, detail="Langflow authentication failed")
+                if response.status_code == 404:
+                    raise HTTPException(status_code=404, detail="Flow not found")
 
-        response_data = response.json()
-        print(f"LangFlow raw response: {json.dumps(response_data, indent=2)}")
+                error_text = response.text
+                print(f"LangFlow error response: {error_text}")
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"LangFlow error: {error_text}"
+                )
 
+            response_data = response.json()
+            print(f"LangFlow raw response: {json.dumps(response_data, indent=2)}")
+
+        # Extract bot response from Langflow response
         bot_response = extract_bot_response(response_data)
 
         return MessageResponse(
@@ -157,15 +161,13 @@ async def get_session_info(
         session_id: str
 ) -> Dict[str, Any]:
     """
-    Get information about a chat session (placeholder for future implementation)
+    Get information about a chat session
     """
     try:
         token = get_user_token(request)
         if not token:
-            raise HTTPException(status_code=401, detail="No valid Langflow access token found")
+            raise HTTPException(status_code=401, detail="No valid authentication token found")
 
-        # For now, just return basic session info
-        # In the future, this could fetch conversation history from LangFlow
         return {
             "session_id": session_id,
             "status": "active",

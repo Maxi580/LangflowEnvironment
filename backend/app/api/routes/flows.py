@@ -9,10 +9,11 @@ from ..utils.jwt_helper import get_user_token
 
 LANGFLOW_URL = os.getenv("LANGFLOW_INTERNAL_URL", "http://langflow:7860")
 
-router = APIRouter(prefix="/api/langflow", tags=["langflow"])
+# Changed from "/api/langflow" to "/api/flows"
+router = APIRouter(prefix="/api/flows", tags=["flows"])
 
 
-@router.get("/flows")
+@router.get("")
 async def get_flows(
         request: Request,
         remove_example_flows: bool = True,
@@ -66,12 +67,13 @@ async def get_flows(
         raise HTTPException(status_code=500, detail=f"Error getting flows: {str(e)}")
 
 
-@router.post("/flows/upload")
+@router.post("/upload")
 async def upload_flow(
         request: Request,
         file: UploadFile = File(...),
         folder_id: Optional[str] = Form(None)
 ) -> Dict[str, Any]:
+    """Upload a flow file to Langflow"""
     try:
         token = get_user_token(request)
         if not token:
@@ -91,6 +93,8 @@ async def upload_flow(
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
 
+        print(f"Uploading file: {file.filename} ({len(file_content)} bytes)")
+
         files = {
             'file': (file.filename, file_content, file.content_type or 'application/json')
         }
@@ -105,7 +109,11 @@ async def upload_flow(
             'Authorization': f'Bearer {token}'
         }
 
+        print(f"Making POST request to: {url}")
+
         response = requests.post(url, headers=headers, files=files, data=data)
+
+        print(f"Langflow upload response status: {response.status_code}")
 
         if not response.ok:
             if response.status_code == 401:
@@ -116,6 +124,7 @@ async def upload_flow(
                     raise HTTPException(status_code=422, detail=f"Langflow validation error: {error_detail}")
                 except:
                     raise HTTPException(status_code=422, detail=f"Langflow validation error: {response.text}")
+            print(f"Upload error response: {response.text}")
             raise HTTPException(
                 status_code=response.status_code,
                 detail=f"Upload failed: {response.text}"
@@ -125,19 +134,23 @@ async def upload_flow(
 
         if isinstance(result, list) and len(result) > 0:
             flow = result[0]
+            print(f"Successfully uploaded flow: {flow.get('name', 'Unknown')}")
             return flow
         else:
+            print("Successfully uploaded flow")
             return result
 
     except HTTPException:
         raise
     except requests.exceptions.RequestException as e:
+        print(f"Connection error to Langflow: {e}")
         raise HTTPException(status_code=503, detail=f"Could not connect to Langflow: {str(e)}")
     except Exception as e:
+        print(f"Error uploading flow: {e}")
         raise HTTPException(status_code=500, detail=f"Error uploading flow: {str(e)}")
 
 
-@router.delete("/flows/{flow_id}")
+@router.delete("/{flow_id}")
 async def delete_flow(request: Request, flow_id: str) -> Dict[str, Any]:
     """Delete a specific flow"""
     try:
@@ -192,7 +205,7 @@ async def delete_flow(request: Request, flow_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Error deleting flow: {str(e)}")
 
 
-@router.delete("/flows")
+@router.delete("")
 async def delete_multiple_flows(
         request: Request,
         flow_ids: List[str]
@@ -206,7 +219,6 @@ async def delete_multiple_flows(
         if not flow_ids:
             raise HTTPException(status_code=400, detail="No flow IDs provided")
 
-        # Make request to Langflow
         url = f"{LANGFLOW_URL}/api/v1/flows/"
         headers = {
             'Accept': 'application/json',
