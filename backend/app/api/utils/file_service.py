@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 
 import requests
@@ -17,24 +18,94 @@ DEFAULT_CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
 DEFAULT_COLLECTION = os.getenv("DEFAULT_COLLECTION", "langflow_documents")
 
 
-def get_ollama_embedding(text: str, model: str = DEFAULT_EMBEDDING_MODEL, base_url: str = OLLAMA_URL) -> List[float]:
-    url = f"{base_url}/api/embeddings"
+def get_ollama_embedding(text: str, model: str = DEFAULT_EMBEDDING_MODEL) -> List[float]:
+    url = f"{OLLAMA_URL}/api/embeddings"
     payload = {
         "model": model,
         "prompt": text
     }
 
     try:
-        response = requests.post(url, json=payload)
+        print(f"Requesting embedding from {url} with model: {model}")
+        response = requests.post(url, json=payload, timeout=30)
         response.raise_for_status()
+
         result = response.json()
+        print(f"Ollama API response status: {response.status_code}")
+
+        # Validate response structure
+        if not isinstance(result, dict):
+            raise ValueError(f"Expected dict response, got {type(result)}")
+
         embedding = result.get("embedding")
-        if not embedding:
-            raise ValueError(f"No embedding returned from Ollama API: {response.text}")
+        if embedding is None:
+            raise ValueError(f"No embedding field in response. Response keys: {list(result.keys())}")
+
+        # Validate embedding format
+        if not isinstance(embedding, list):
+            raise ValueError(f"Expected list for embedding, got {type(embedding)}")
+
+        if len(embedding) == 0:
+            raise ValueError("Received empty embedding")
+
+        # Validate that all elements are numbers
+        if not all(isinstance(x, (int, float)) for x in embedding):
+            raise ValueError("Embedding contains non-numeric values")
+
+        print(f"Successfully got embedding of size {len(embedding)} for model {model}")
         return embedding
+
+    except requests.exceptions.Timeout:
+        print(f"Timeout connecting to Ollama API at {url}")
+        raise ValueError(f"Timeout connecting to Ollama API (model: {model})")
+
+    except requests.exceptions.ConnectionError:
+        print(f"Connection error to Ollama API at {url}")
+        raise ValueError(f"Cannot connect to Ollama API at {OLLAMA_URL} (model: {model})")
+
     except requests.exceptions.RequestException as e:
-        print(f"Error connecting to Ollama API: {e}")
+        print(f"Request error connecting to Ollama API: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_detail = e.response.json()
+                raise ValueError(f"Ollama API error: {error_detail}")
+            except:
+                raise ValueError(f"Ollama API error: {e.response.text}")
+        raise ValueError(f"Error connecting to Ollama API: {str(e)}")
+
+    except ValueError:
+        # Re-raise ValueError as-is
         raise
+
+    except Exception as e:
+        print(f"Unexpected error getting embedding: {e}")
+        raise ValueError(f"Unexpected error getting embedding from model {model}: {str(e)}")
+
+
+def test_embedding_model(model: str, base_url: str = OLLAMA_URL) -> Dict[str, Any]:
+    try:
+        test_text = "This is a test sentence for embedding dimension detection."
+
+        start_time = time.time()
+        embedding = get_ollama_embedding(test_text, model)
+        response_time = time.time() - start_time
+
+        return {
+            "success": True,
+            "model_name": model,
+            "vector_size": len(embedding),
+            "response_time_seconds": round(response_time, 3),
+            "sample_values": embedding[:5] if len(embedding) >= 5 else embedding,
+            "test_text": test_text
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "model_name": model,
+            "error": str(e),
+            "vector_size": None
+        }
 
 
 def is_file_in_qdrant(file_path: str, collection_name: str, qdrant_url: str = QDRANT_URL) -> bool:
@@ -147,7 +218,6 @@ def upload_to_qdrant(
         sample_embedding = get_ollama_embedding(
             "Sample text for dimension testing",
             embedding_model,
-            ollama_url
         )
         vector_size = len(sample_embedding)
         print(f"Sample embedding size: {vector_size}")
@@ -182,7 +252,7 @@ def upload_to_qdrant(
             if chunk_idx % 5 == 0:
                 print(f"Processing chunk {chunk_idx + 1}/{len(chunks)}")
 
-            embedding = get_ollama_embedding(chunk, embedding_model, ollama_url)
+            embedding = get_ollama_embedding(chunk, embedding_model)
             point_id = str(uuid.uuid4())
 
             points.append({

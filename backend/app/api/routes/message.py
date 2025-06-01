@@ -6,9 +6,10 @@ import time
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 
+from .flows import get_component_ids
 from ..utils.jwt_helper import get_user_token
 from ..utils.api_key import TemporaryApiKey, create_api_key_headers
-from ..utils.message_parser import extract_bot_response
+from ..utils.message import extract_bot_response
 
 LANGFLOW_URL = os.getenv("LANGFLOW_INTERNAL_URL")
 LF_RUN_FLOW_ENDPOINT = os.getenv("LF_RUN_FLOW_ENDPOINT")
@@ -51,6 +52,19 @@ async def send_message(
 
         session_id = message_request.session_id or f"session_{int(time.time())}_{os.urandom(4).hex()}"
 
+        print(f"Getting component IDs for flow: {message_request.flow_id}")
+
+        component_data = await get_component_ids(request, message_request.flow_id)
+        component_ids = component_data.get('component_ids', [])
+
+        qdrant_component_ids = [
+            comp_id for comp_id in component_ids
+            if 'qdrant' in comp_id.lower()
+        ]
+
+        print(f"Found {len(component_ids)} total components")
+        print(f"Found {len(qdrant_component_ids)} Qdrant components: {qdrant_component_ids}")
+
         payload = {
             "input_value": message_request.message,
             "output_type": "chat",
@@ -58,20 +72,22 @@ async def send_message(
             "session_id": session_id
         }
 
+        if qdrant_component_ids:
+            tweaks = {}
+            for qdrant_id in qdrant_component_ids:
+                tweaks[qdrant_id] = {
+                    "collection_name": message_request.flow_id
+                }
+            payload["tweaks"] = tweaks
+            print(f"Added collection_name tweaks for Qdrant components: {list(tweaks.keys())}")
+
         print(f"Processing message request - Flow: {message_request.flow_id}, Session: {session_id}")
 
-        # Use temporary API key to make request to Langflow
         with TemporaryApiKey(user_token) as api_key:
             url = f"{LANGFLOW_URL}{LF_RUN_FLOW_ENDPOINT.format(flow_id=message_request.flow_id)}"
             headers = create_api_key_headers(api_key)
 
-            print(f"Sending message to LangFlow: {url}")
-            print(f"Using x-api-key header")
-            print(f"Payload: {json.dumps(payload, indent=2)}")
-
             response = requests.post(url, headers=headers, json=payload, timeout=30)
-
-            print(f"LangFlow response status: {response.status_code}")
 
             if not response.ok:
                 if response.status_code == 401:

@@ -70,6 +70,66 @@ async def get_flows(
         raise HTTPException(status_code=500, detail=f"Error getting flows: {str(e)}")
 
 
+@router.get("/{flow_id}/component-ids")
+async def get_component_ids(request: Request, flow_id: str) -> Dict[str, Any]:
+    """Get all component IDs from a specific flow"""
+    try:
+        token = get_user_token(request)
+        if not token:
+            raise HTTPException(status_code=401, detail="No valid Langflow access token found")
+
+        url = f"{LANGFLOW_URL}{LF_FLOWS_BASE_ENDPOINT.rstrip('/')}/{flow_id}"
+        headers = {
+            'Accept': 'application/json',
+            'Authorization': f'Bearer {token}'
+        }
+
+        response = requests.get(url, headers=headers)
+
+        if not response.ok:
+            if response.status_code == 401:
+                raise HTTPException(status_code=401, detail="Langflow token expired or invalid")
+            if response.status_code == 404:
+                raise HTTPException(status_code=404, detail="Flow not found")
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Langflow error: {response.text}"
+            )
+
+        flow_data = response.json()
+
+        component_ids = []
+
+        flow_graph = flow_data.get('data', {})
+        nodes = flow_graph.get('nodes', [])
+
+        if not nodes and 'graph' in flow_data:
+            nodes = flow_data['graph'].get('nodes', [])
+
+        for node in nodes:
+            component_id = node.get('id')
+            if component_id:
+                component_ids.append(component_id)
+
+        print(f"Retrieved {len(component_ids)} component IDs for flow: {flow_id}")
+
+        return {
+            'success': True,
+            'flow_id': flow_id,
+            'flow_name': flow_data.get('name'),
+            'total_components': len(component_ids),
+            'component_ids': component_ids
+        }
+
+    except HTTPException:
+        raise
+    except requests.exceptions.RequestException as e:
+        print(f"Connection error to Langflow: {e}")
+        raise HTTPException(status_code=503, detail=f"Could not connect to Langflow: {str(e)}")
+    except Exception as e:
+        print(f"Error getting component IDs: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting component IDs: {str(e)}")
+
 @router.post(FLOWS_UPLOAD_ENDPOINT)
 async def upload_flow(
         request: Request,

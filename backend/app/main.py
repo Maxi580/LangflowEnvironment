@@ -7,6 +7,7 @@ from .api.routes.user import router as user_router
 from .api.routes.redirect import router as redirect_router
 from .api.routes.flows import router as flow_router
 from .api.routes.message import router as apikey_router
+from .api.routes.files import router as qdrant_router
 
 load_dotenv()
 
@@ -45,7 +46,7 @@ app.include_router(user_router)
 app.include_router(redirect_router)
 app.include_router(flow_router)
 app.include_router(apikey_router)
-
+app.include_router(qdrant_router)
 
 @app.get("/")
 async def root():

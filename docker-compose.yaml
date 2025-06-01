@@ -94,8 +94,8 @@ services:
       - qdrant_data:/qdrant/storage
     networks:
       - app-network
-    # ports:
-    #   - "${QDRANT_PORT:-6333}:6333"
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
     environment:
       - QDRANT__SERVICE__HTTP_PORT=6333
       - QDRANT__SERVICE__GRPC_PORT=6334
@@ -115,8 +115,8 @@ services:
       - ollama_data:/root/.ollama
     networks:
       - app-network
-    # ports:
-    #   - "${OLLAMA_PORT:-11434}:11434"
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
     environment:
       - OLLAMA_HOST=0.0.0.0
     healthcheck:
