@@ -36,6 +36,8 @@ services:
     depends_on:
       - langflow
       - postgres
+      - qdrant
+      - ollama
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/health" ]
       interval: 30s
@@ -84,6 +86,45 @@ services:
       timeout: 5s
       retries: 5
 
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    container_name: ${QDRANT_CONTAINER_NAME:-qdrant}
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - app-network
+    # ports:
+    #   - "${QDRANT_PORT:-6333}:6333"
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  ollama:
+    build:
+      context: ./ollama
+      dockerfile: Dockerfile
+    container_name: ${OLLAMA_CONTAINER_NAME:-ollama}
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - app-network
+    # ports:
+    #   - "${OLLAMA_PORT:-11434}:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   adminer:
     image: adminer
     container_name: ${ADMINER_CONTAINER_NAME}
@@ -106,6 +147,10 @@ volumes:
   backend_data:
     driver: local
   postgres_data:
+    driver: local
+  qdrant_data:
+    driver: local
+  ollama_data:
     driver: local
 
 networks:

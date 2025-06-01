@@ -5,12 +5,18 @@ import langflowRedirectService from '../services/LangflowRedirectService';
 import FlowManagement from '../components/FlowManagement';
 import DeleteConfirmation from '../components/DeleteConfirmation';
 import ChatManagement from "../components/ChatManagement";
+import FileManagement from "../components/FileManagement";
 
 const Dashboard = ({ user }) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedFlow, setSelectedFlow] = useState(null);
+
+  // Add these missing state variables
+  const [messages, setMessages] = useState([]);
+  const [files, setFiles] = useState([]);
+
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -48,6 +54,8 @@ const Dashboard = ({ user }) => {
 
   const handleFlowSelect = (flow) => {
     setSelectedFlow(flow);
+    // Clear messages when switching flows
+    setMessages([]);
   };
 
   return (
@@ -103,13 +111,34 @@ const Dashboard = ({ user }) => {
         </div>
       </header>
 
-      {/* Main Dashboard Content - Updated */}
+      {/* Main Dashboard Content */}
       <main className="container mx-auto px-4 py-6">
-        {/* Flow Management Section - Pass the props */}
+        {/* Flow Management Section */}
         <FlowManagement
           onFlowSelect={handleFlowSelect}
           selectedFlowId={selectedFlow?.id}
         />
+
+        {/* Chat and File Management Section - align with flow selection boundaries */}
+        <div className="grid grid-cols-12 gap-4 mt-6">
+          {/* Chat Management - 8 columns (67%) - BIGGER */}
+          <div className="col-span-8">
+            <ChatManagement
+              selectedFlow={selectedFlow}
+              files={files}
+              messages={messages}
+              setMessages={setMessages}
+            />
+          </div>
+
+          {/* File Management - 4 columns (33%) */}
+          <div className="col-span-4">
+            <FileManagement
+              flowId={selectedFlow?.id}
+              setMessages={setMessages}
+            />
+          </div>
+        </div>
       </main>
 
       <DeleteConfirmation
@@ -118,10 +147,6 @@ const Dashboard = ({ user }) => {
         onConfirm={handleDeleteUser}
         isLoading={isDeleting}
         username={user?.username}
-      />
-
-      <ChatManagement
-        selectedFlow={selectedFlow}
       />
     </div>
   );

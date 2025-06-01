@@ -5,8 +5,7 @@ import messageService from '../services/MessageService';
  * ChatManagement component that handles all chat-related functionality
  * including message display, input handling, and API communication
  */
-const ChatManagement = ({ selectedFlow, files = [] }) => {
-  const [messages, setMessages] = useState([]);
+const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
 
@@ -36,7 +35,7 @@ const ChatManagement = ({ selectedFlow, files = [] }) => {
     } else {
       setMessages([]);
     }
-  }, [selectedFlow]);
+  }, [selectedFlow, setMessages]);
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
@@ -185,7 +184,7 @@ const ChatManagement = ({ selectedFlow, files = [] }) => {
   );
 
   return (
-    <div className="max-w-4xl mx-auto bg-slate-800 border border-slate-700 rounded-xl shadow-lg overflow-hidden">
+    <div className="w-full bg-slate-800 border border-slate-700 rounded-xl shadow-lg overflow-hidden">
       {/* Chat Header */}
       <div className="bg-slate-700 px-4 py-3 border-b border-slate-600">
         <div className="flex items-center justify-between">
