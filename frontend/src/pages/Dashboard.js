@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import userService from '../services/UserService';
 import langflowRedirectService from '../services/LangflowRedirectService';
+import fileService from '../services/FileService';
 import FlowManagement from '../components/FlowManagement';
 import DeleteConfirmation from '../components/DeleteConfirmation';
 import ChatManagement from "../components/ChatManagement";
@@ -52,10 +53,22 @@ const Dashboard = ({ user }) => {
     }
   };
 
-  const handleFlowSelect = (flow) => {
+  const handleFlowSelect = async (flow) => {
     setSelectedFlow(flow);
     // Clear messages when switching flows
     setMessages([]);
+
+    // If a flow is selected, ensure collection exists
+    if (flow) {
+      try {
+        // Create collection if it doesn't exist (this is safe - won't recreate if exists)
+        await fileService.createCollection(flow.id);
+        console.log(`Collection ready for flow: ${flow.id}`);
+      } catch (error) {
+        console.error('Error creating collection:', error);
+        // Don't block the flow selection, just log the error
+      }
+    }
   };
 
   return (
