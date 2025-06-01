@@ -1,10 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import flowService from '../services/FlowService';
+import fileService from '../services/FileService';
 
-/**
- * FlowManagement component - A dropdown-style flow management system
- * Handles flow selection, uploading, and deletion
- */
+
 const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
   const [flows, setFlows] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -96,22 +94,42 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
   };
 
   /**
-   * Handle flow deletion
+   * Handle flow deletion with collection cleanup
    */
   const handleDeleteFlow = async (flowId, flowName, event) => {
     event.stopPropagation(); // Prevent dropdown from closing
 
     try {
+      console.log(`Deleting flow: ${flowName} (${flowId})`);
+
+      // First, delete the collection associated with this flow
+      try {
+        console.log(`Attempting to delete collection: ${flowId}`);
+        await fileService.deleteCollection(flowId);
+        console.log(`Collection deleted successfully: ${flowId}`);
+      } catch (collectionError) {
+        console.warn(`Failed to delete collection ${flowId}:`, collectionError);
+        // Don't fail the entire operation if collection deletion fails
+        // The collection might not exist or might already be deleted
+      }
+
+      // Then delete the flow from LangFlow
       await flowService.deleteFlow(flowId);
+      console.log(`Flow deleted successfully: ${flowId}`);
+
+      // Remove from local state
       setFlows(prevFlows => prevFlows.filter(flow => flow.id !== flowId));
 
       // If deleted flow was selected, clear selection
       if (selectedFlowId === flowId) {
         onFlowSelect(null);
       }
+
+      console.log(`Complete deletion successful for flow: ${flowName}`);
+
     } catch (err) {
       console.error('Error deleting flow:', err);
-      setError(`Failed to delete flow: ${err.message}`);
+      setError(`Failed to delete flow "${flowName}": ${err.message}`);
     }
   };
 
@@ -315,7 +333,7 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
                       onClick={(e) => handleDeleteFlow(flow.id, flow.name, e)}
                       className="ml-2 p-1 text-slate-400 hover:text-red-400 hover:bg-red-900/20
                                rounded transition-colors flex-shrink-0"
-                      title="Delete flow"
+                      title={`Delete flow and associated collection`}
                     >
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
