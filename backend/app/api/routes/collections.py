@@ -23,6 +23,8 @@ QDRANT_URL = os.getenv("INTERNAL_QDRANT_URL")
 OLLAMA_URL = os.getenv("INTERNAL_OLLAMA_URL")
 COLLECTIONS_BASE_ENDPOINT = os.getenv("COLLECTIONS_BASE_ENDPOINT")
 BACKEND_UPLOAD_DIR = os.getenv("BACKEND_UPLOAD_DIR")
+COLLECTIONS_FILES_ENDPOINT = os.getenv("COLLECTIONS_FILES_ENDPOINT", "/files")
+COLLECTIONS_UPLOAD_ENDPOINT = os.getenv("COLLECTIONS_UPLOAD_ENDPOINT", "/files/upload")
 
 router = APIRouter(prefix=COLLECTIONS_BASE_ENDPOINT, tags=["collections"])
 
@@ -187,7 +189,7 @@ async def delete_collection(
         raise HTTPException(status_code=500, detail=f"Error deleting collection: {str(e)}")
 
 
-@router.get("/{flow_id}/files")
+@router.get(f"/{{flow_id}}{COLLECTIONS_FILES_ENDPOINT}")
 async def list_files_in_collection(
         request: Request,
         flow_id: str
@@ -240,7 +242,7 @@ async def list_files_in_collection(
         raise HTTPException(status_code=500, detail=f"Error listing files in collection: {str(e)}")
 
 
-@router.post("/{flow_id}/files/upload")
+@router.post(f"/{{flow_id}}{COLLECTIONS_UPLOAD_ENDPOINT}")
 async def upload_file_to_collection(
         request: Request,
         flow_id: str,
@@ -353,7 +355,7 @@ async def upload_file_to_collection(
         raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
 
 
-@router.delete("/{flow_id}/files")
+@router.delete(f"/{{flow_id}}{COLLECTIONS_FILES_ENDPOINT}")
 async def delete_file_from_collection(
         request: Request,
         flow_id: str,
