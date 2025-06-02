@@ -3,31 +3,52 @@ import TokenRefreshService from './TokenRefreshService';
 
 /**
  * Service for managing files and collections in the application
- * Updated to work with the new collection-based backend API
+ * Updated to match the exact backend API structure
  */
 class FileService {
-  constructor() {
-    this.COLLECTIONS_BASE_URL = `${config.api.backendUrl}/api/files`;
+  /**
+   * Lists all collections
+   * @returns {Promise<Array>} - Array of collection objects
+   */
+  async listCollections() {
+    try {
+      const response = await TokenRefreshService.authenticatedFetch(
+        config.api.getCollectionsBaseUrl(),
+        {
+          method: 'GET'
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to list collections: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.collections || [];
+    } catch (error) {
+      console.error('Error listing collections:', error);
+      throw error;
+    }
   }
 
   /**
-   * Creates a new collection
-   * @param {string} collectionName - Name of the collection to create
+   * Creates a new collection using flow_id
+   * @param {string} flowId - Flow ID to use as collection identifier
    * @param {string} embeddingModel - Embedding model to use (default: 'nomic-embed-text')
    * @returns {Promise<Object>} - Result of the creation operation
    */
-  async createCollection(collectionName, embeddingModel = 'nomic-embed-text') {
-    if (!collectionName) {
-      throw new Error("Collection name is required");
+  async createCollection(flowId, embeddingModel = 'nomic-embed-text') {
+    if (!flowId) {
+      throw new Error("Flow ID is required");
     }
 
     try {
+      // URL: POST /api/collections/{flow_id}
       const response = await TokenRefreshService.authenticatedFetch(
-        this.COLLECTIONS_BASE_URL,
+        config.api.getCollectionCreateUrl(flowId),
         {
           method: 'POST',
           body: JSON.stringify({
-            collection_name: collectionName,
             embedding_model: embeddingModel
           })
         }
@@ -46,18 +67,19 @@ class FileService {
   }
 
   /**
-   * Deletes a collection
-   * @param {string} collectionName - Name of the collection to delete
+   * Deletes a collection by flow_id
+   * @param {string} flowId - Flow ID of the collection to delete
    * @returns {Promise<Object>} - Result of the deletion operation
    */
-  async deleteCollection(collectionName) {
-    if (!collectionName) {
-      throw new Error("Collection name is required");
+  async deleteCollection(flowId) {
+    if (!flowId) {
+      throw new Error("Flow ID is required");
     }
 
     try {
+      // URL: DELETE /api/collections/{flow_id}
       const response = await TokenRefreshService.authenticatedFetch(
-        `${this.COLLECTIONS_BASE_URL}/${encodeURIComponent(collectionName)}`,
+        config.api.getCollectionDeleteUrl(flowId),
         {
           method: 'DELETE'
         }
@@ -76,8 +98,8 @@ class FileService {
   }
 
   /**
-   * Fetches all files from a specific collection (replaces the old fetchFiles method)
-   * @param {string} flowId - Flow ID (collection name) to filter files
+   * Fetches all files from a specific collection
+   * @param {string} flowId - Flow ID (collection identifier)
    * @returns {Promise<Array>} - Promise resolving to an array of file objects
    */
   async fetchFiles(flowId) {
@@ -86,8 +108,9 @@ class FileService {
     }
 
     try {
+      // URL: GET /api/collections/{flow_id}/files
       const response = await TokenRefreshService.authenticatedFetch(
-        `${this.COLLECTIONS_BASE_URL}/${encodeURIComponent(flowId)}/files`,
+        config.api.getCollectionFilesUrl(flowId),
         {
           method: 'GET'
         }
@@ -96,7 +119,7 @@ class FileService {
       if (!response.ok) {
         if (response.status === 404) {
           // Collection doesn't exist, try to create it first
-          console.log(`Collection '${flowId}' not found, creating it...`);
+          console.log(`Collection for flow '${flowId}' not found, creating it...`);
           await this.createCollection(flowId);
           // Return empty array for new collection
           return [];
@@ -115,7 +138,7 @@ class FileService {
   /**
    * Uploads files to a specific collection
    * @param {FileList|File[]} files - Files to upload
-   * @param {string} flowId - Flow ID (collection name) to associate files with
+   * @param {string} flowId - Flow ID (collection identifier)
    * @param {Object} options - Upload options
    * @param {string} options.embeddingModel - Embedding model to use
    * @param {number} options.chunkSize - Chunk size for text splitting
@@ -160,8 +183,9 @@ class FileService {
         formData.append('chunk_overlap', chunkOverlap.toString());
 
         try {
+          // URL: POST /api/collections/{flow_id}/files/upload
           const response = await TokenRefreshService.authenticatedFetch(
-            `${this.COLLECTIONS_BASE_URL}/${encodeURIComponent(flowId)}/files/upload`,
+            config.api.getCollectionUploadUrl(flowId),
             {
               method: 'POST',
               body: formData
@@ -208,7 +232,7 @@ class FileService {
   /**
    * Deletes a file from a collection
    * @param {string} filePath - Path to the file to delete
-   * @param {string} flowId - ID of the flow (collection name) associated with the file
+   * @param {string} flowId - Flow ID (collection identifier)
    * @returns {Promise<Object>} - Result of the deletion operation
    */
   async deleteFile(filePath, flowId) {
@@ -221,14 +245,15 @@ class FileService {
     }
 
     try {
+      // URL: DELETE /api/collections/{flow_id}/files?file_path=...
+      const url = new URL(config.api.getCollectionFileDeleteUrl(flowId));
+      url.searchParams.append('file_path', filePath);
+
       const response = await TokenRefreshService.authenticatedFetch(
-        `${this.COLLECTIONS_BASE_URL}/${encodeURIComponent(flowId)}/files`,
+        url.toString(),
         {
-          method: 'DELETE',
-          body: JSON.stringify({
-            file_path: filePath,
-            collection_name: flowId
-          })
+          method: 'DELETE'
+          // No body needed - file_path is now a query parameter
         }
       );
 
@@ -250,9 +275,8 @@ class FileService {
    */
   async getEmbeddingModels() {
     try {
-      // This endpoint might need to be updated based on your backend
       const response = await TokenRefreshService.authenticatedFetch(
-        `${config.api.backendUrl}/api/models`,
+        config.api.getModelsUrl(),
         {
           method: 'GET'
         }
@@ -278,7 +302,7 @@ class FileService {
   async checkServerStatus(flowId) {
     try {
       // Check overall health
-      const healthResponse = await fetch(`${config.api.backendUrl}/health`);
+      const healthResponse = await fetch(config.api.getHealthUrl());
 
       if (!healthResponse.ok) {
         throw new Error(`Health check failed: ${healthResponse.status}`);
@@ -290,7 +314,7 @@ class FileService {
       if (flowId) {
         try {
           const collections = await this.listCollections();
-          const collectionExists = collections.some(c => c.name === flowId);
+          const collectionExists = collections.some(c => c.flow_id === flowId || c.name === flowId);
 
           return {
             ...healthData,
@@ -314,7 +338,7 @@ class FileService {
   }
 
   /**
-   * Gets file details by ID (may need backend support)
+   * Gets file details by ID
    * @param {string} fileId - ID of the file to retrieve
    * @param {string} flowId - Flow ID associated with the file
    * @returns {Promise<Object>} - File details
@@ -356,14 +380,14 @@ class FileService {
   }
 
   /**
-   * Check if a collection exists
-   * @param {string} collectionName - Name of the collection to check
+   * Check if a collection exists by flow_id
+   * @param {string} flowId - Flow ID to check
    * @returns {Promise<boolean>} - True if collection exists
    */
-  async collectionExists(collectionName) {
+  async collectionExists(flowId) {
     try {
       const collections = await this.listCollections();
-      return collections.some(c => c.name === collectionName);
+      return collections.some(c => c.flow_id === flowId || c.name === flowId);
     } catch (error) {
       console.error('Error checking collection existence:', error);
       return false;
@@ -371,17 +395,17 @@ class FileService {
   }
 
   /**
-   * Get collection info
-   * @param {string} collectionName - Name of the collection
+   * Get collection info by flow_id
+   * @param {string} flowId - Flow ID to get info for
    * @returns {Promise<Object>} - Collection information
    */
-  async getCollectionInfo(collectionName) {
+  async getCollectionInfo(flowId) {
     try {
       const collections = await this.listCollections();
-      const collection = collections.find(c => c.name === collectionName);
+      const collection = collections.find(c => c.flow_id === flowId || c.name === flowId);
 
       if (!collection) {
-        throw new Error(`Collection '${collectionName}' not found`);
+        throw new Error(`Collection for flow '${flowId}' not found`);
       }
 
       return collection;

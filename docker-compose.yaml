@@ -1,48 +1,24 @@
 version: '3.8'
 
 services:
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: ${FRONTEND_CONTAINER_NAME}
+  postgres:
+    image: postgres:15-alpine
+    container_name: ${POSTGRES_CONTAINER_NAME}
+    hostname: ${POSTGRES_HOST}
     ports:
-      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - postgres_data:/var/lib/postgresql/data
     env_file:
       - .env
     restart: unless-stopped
     networks:
       - app-network
-    depends_on:
-      - backend
-
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: ${BACKEND_CONTAINER_NAME}
-    ports:
-      - "${BACKEND_PORT}:${BACKEND_PORT}"
-    volumes:
-      - backend_data:${BACKEND_UPLOAD_DIR}
-    env_file:
-      - .env
-    restart: unless-stopped
-    networks:
-      - app-network
-    depends_on:
-      - langflow
-      - postgres
-      - qdrant
-      - ollama
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   langflow:
     build:
@@ -67,24 +43,49 @@ services:
       timeout: 10s
       retries: 3
 
-  postgres:
-    image: postgres:15-alpine
-    container_name: ${POSTGRES_CONTAINER_NAME}
-    hostname: ${POSTGRES_HOST}
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ${BACKEND_CONTAINER_NAME}
     ports:
-      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - backend_data:${BACKEND_UPLOAD_DIR}
     env_file:
       - .env
     restart: unless-stopped
     networks:
       - app-network
+    depends_on:
+      langflow:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: [ "CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ${FRONTEND_CONTAINER_NAME}
+    ports:
+      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - app-network
+    depends_on:
+      backend:
+        condition: service_healthy
+      langflow:
+        condition: service_healthy
 
   qdrant:
     image: qdrant/qdrant:v1.7.4

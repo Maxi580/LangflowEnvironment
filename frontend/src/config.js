@@ -23,6 +23,10 @@ const MESSAGES_SEND_ENDPOINT = process.env.REACT_APP_MESSAGES_SEND_ENDPOINT || '
 const REDIRECT_BASE_ENDPOINT = process.env.REACT_APP_REDIRECT_BASE_ENDPOINT || '/api/redirect';
 const REDIRECT_LANGFLOW_ENDPOINT = process.env.REACT_APP_REDIRECT_LANGFLOW_ENDPOINT || '/redirect-langflow';
 
+const COLLECTIONS_BASE_ENDPOINT = process.env.REACT_APP_COLLECTIONS_BASE_ENDPOINT || '/api/collections';
+const COLLECTIONS_FILES_ENDPOINT = process.env.REACT_APP_COLLECTIONS_FILES_ENDPOINT || '/files';
+const COLLECTIONS_UPLOAD_ENDPOINT = process.env.REACT_APP_COLLECTIONS_UPLOAD_ENDPOINT || '/files/upload';
+
 const config = {
  api: {
    langflowUrl: LANGFLOW_API,
@@ -63,6 +67,18 @@ const config = {
    // Redirect endpoints
    getRedirectBaseUrl: () => `${BACKEND_API}${REDIRECT_BASE_ENDPOINT}`,
    getRedirectLangflowUrl: () => `${BACKEND_API}${REDIRECT_BASE_ENDPOINT}${REDIRECT_LANGFLOW_ENDPOINT}`,
+
+   // Collections endpoints - matching backend API structure
+   getCollectionsBaseUrl: () => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}`,
+
+   // Collection management (flow_id based)
+   getCollectionCreateUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}/${flowId}`,
+   getCollectionDeleteUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}/${flowId}`,
+
+   // Collection files management
+   getCollectionFilesUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}/${flowId}${COLLECTIONS_FILES_ENDPOINT}`,
+   getCollectionUploadUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}/${flowId}${COLLECTIONS_UPLOAD_ENDPOINT}`,
+   getCollectionFileDeleteUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}/${flowId}${COLLECTIONS_FILES_ENDPOINT}`,
  },
 
  version: APP_VERSION,
