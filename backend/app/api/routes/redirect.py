@@ -4,7 +4,7 @@ from ..utils.jwt_helper import get_user_tokens, get_token_max_age
 import os
 from typing import Optional
 
-LANGFLOW_EXTERNAL_URL = os.getenv("LANGFLOW_EXTERNAL_URL")
+LANGFLOW_URL = os.getenv("LANGFLOW_URL")
 REDIRECT_BASE_ENDPOINT = os.getenv("REDIRECT_BASE_ENDPOINT")
 REDIRECT_LANGFLOW_ENDPOINT = os.getenv("REDIRECT_LANGFLOW_ENDPOINT")
 
@@ -26,7 +26,7 @@ async def redirect_to_langflow(
     if access_token_max_age < 60:
         return RedirectResponse(url="/login", status_code=302)
 
-    target_url = redirect_url or f"{LANGFLOW_EXTERNAL_URL}/"
+    target_url = f"{LANGFLOW_URL}/"
 
     redirect_response = RedirectResponse(url=target_url, status_code=302)
 

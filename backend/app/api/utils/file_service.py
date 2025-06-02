@@ -1,6 +1,7 @@
 import os
 import time
 from pathlib import Path
+from fastapi import Request
 
 import requests
 import uuid
@@ -9,6 +10,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 import PyPDF2
 import mimetypes
+from ..routes.flows import get_flows
 
 OLLAMA_URL = os.getenv("INTERNAL_OLLAMA_URL", "http://ollama:11434")
 QDRANT_URL = os.getenv("INTERNAL_QDRANT_URL", "http://qdrant:6333")
@@ -17,6 +19,26 @@ DEFAULT_CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
 DEFAULT_CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
 DEFAULT_COLLECTION = os.getenv("DEFAULT_COLLECTION", "langflow_documents")
 
+
+def construct_collection_name(flow_id: str):
+    return flow_id
+
+async def verify_user_flow_access(request: Request, flow_id: str) -> bool:
+    try:
+
+        print(f"Checking user access to flow: {flow_id}")
+
+        flows = await get_flows(request, remove_example_flows=True, header_flows=False, get_all=True)
+
+        user_flow_ids = [flow.get('id') for flow in flows if flow.get('id')]
+
+        has_access = flow_id in user_flow_ids
+
+        return has_access
+
+    except Exception as e:
+        print(f"Error checking flow access: {e}")
+        return False
 
 def get_ollama_embedding(text: str, model: str = DEFAULT_EMBEDDING_MODEL) -> List[float]:
     url = f"{OLLAMA_URL}/api/embeddings"

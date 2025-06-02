@@ -76,31 +76,6 @@ class FileService {
   }
 
   /**
-   * Lists all collections
-   * @returns {Promise<Array>} - List of collections
-   */
-  async listCollections() {
-    try {
-      const response = await TokenRefreshService.authenticatedFetch(
-        this.COLLECTIONS_BASE_URL,
-        {
-          method: 'GET'
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to list collections: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.collections || [];
-    } catch (error) {
-      console.error('Error listing collections:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Fetches all files from a specific collection (replaces the old fetchFiles method)
    * @param {string} flowId - Flow ID (collection name) to filter files
    * @returns {Promise<Array>} - Promise resolving to an array of file objects
