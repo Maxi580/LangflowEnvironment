@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 from ..utils.jwt_helper import get_user_token
-from ..utils.file_service import (
+from ..utils.collection_helper import (
     upload_to_qdrant,
     delete_file_from_qdrant,
     get_files_from_collection,

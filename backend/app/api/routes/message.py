@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from .flows import get_component_ids
 from ..utils.jwt_helper import get_user_token
 from ..utils.api_key import TemporaryApiKey, create_api_key_headers
-from ..utils.message import extract_bot_response
+from ..utils.message_helper import extract_bot_response
 
 LANGFLOW_URL = os.getenv("LANGFLOW_INTERNAL_URL")
 LF_RUN_FLOW_ENDPOINT = os.getenv("LF_RUN_FLOW_ENDPOINT")
@@ -87,7 +87,7 @@ async def send_message(
             url = f"{LANGFLOW_URL}{LF_RUN_FLOW_ENDPOINT.format(flow_id=message_request.flow_id)}"
             headers = create_api_key_headers(api_key)
 
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            response = requests.post(url, headers=headers, json=payload, timeout=3600)
 
             if not response.ok:
                 if response.status_code == 401:

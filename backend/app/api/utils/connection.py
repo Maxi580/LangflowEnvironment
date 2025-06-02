@@ -2,7 +2,7 @@ import os
 import requests
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
-from .file_service import get_ollama_embedding
+from .collection_helper import get_ollama_embedding
 
 OLLAMA_URL = os.getenv("INTERNAL_OLLAMA_URL", "http://ollama:11434")
 QDRANT_URL = os.getenv("INTERNAL_QDRANT_URL", "http://qdrant:6333")

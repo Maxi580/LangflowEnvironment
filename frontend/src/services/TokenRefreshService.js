@@ -61,10 +61,8 @@ class TokenRefreshService {
  * @returns {Promise<Response>} - Fetch response
  */
 async authenticatedFetch(url, options = {}) {
-  // Check if we're sending FormData (for file uploads)
   const isFormData = options.body instanceof FormData;
 
-  // Prepare headers - don't set Content-Type for FormData
   const defaultHeaders = {};
   if (!isFormData) {
     defaultHeaders['Content-Type'] = 'application/json';
