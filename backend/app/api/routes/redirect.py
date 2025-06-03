@@ -40,7 +40,6 @@ async def redirect_to_langflow(
 
     redirect_response.set_cookie(key="access_token_lf", value=access_token, **cookie_config)
     redirect_response.set_cookie(key="auto_login_lf", value="login", **cookie_config)
-    redirect_response.set_cookie(key="apikey_tkn_lflw", value="None", **cookie_config)
     redirect_response.set_cookie(key="sidebarstate", value="true", **cookie_config)
 
     refresh_token_max_age = get_token_max_age(refresh_token)
