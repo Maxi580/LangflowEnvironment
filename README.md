@@ -20,5 +20,5 @@ When configuring services within Langflow to talk to each other:
 
 | Service | Internal URL                                                                        | Notes |
 |---------|-------------------------------------------------------------------------------------|-------|
-| Ollama | http://host.docker.internal:11434, http://ollama.local:11434 or http://ollama:11434 | Used by Langflow to send requests to Ollama |
-| Qdrant | http://host.docker.internal:6333, http://qdrant.local:6333 or http://qdrant:6333   | Used by Langflow to connect to Qdrant |
+| Ollama | http://ollama:11434 | Used by Langflow to send requests to Ollama |
+| Qdrant | http://qdrant:6333   | Used by Langflow to connect to Qdrant |

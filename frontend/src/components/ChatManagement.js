@@ -184,9 +184,9 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => 
   );
 
   return (
-    <div className="w-full bg-slate-800 border border-slate-700 rounded-xl shadow-lg overflow-hidden">
-      {/* Chat Header */}
-      <div className="bg-slate-700 px-4 py-3 border-b border-slate-600">
+    <div className="w-full h-full bg-slate-800 border border-slate-700 rounded-xl shadow-lg overflow-hidden flex flex-col">
+      {/* Chat Header - fixed height */}
+      <div className="bg-slate-700 px-4 py-3 border-b border-slate-600 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-blue-600 rounded-lg">
@@ -223,8 +223,8 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => 
         </div>
       </div>
 
-      {/* Messages Display */}
-      <div className="h-96 overflow-y-auto p-4 space-y-4 bg-slate-900">
+      {/* Messages Display - takes all available space */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900 min-h-0">
         {messages.length === 0 ? (
           renderEmptyState()
         ) : (
@@ -236,8 +236,8 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => 
         )}
       </div>
 
-      {/* Input Area */}
-      <div className="border-t border-slate-700 p-4 bg-slate-800">
+      {/* Input Area - fixed height at bottom */}
+      <div className="border-t border-slate-700 p-4 bg-slate-800 flex-shrink-0">
         <div className="flex space-x-2">
           <textarea
             ref={inputRef}

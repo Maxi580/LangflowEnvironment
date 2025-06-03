@@ -72,9 +72,9 @@ const Dashboard = ({ user }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden">
       {/* Header - same as before */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
+      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <button
@@ -124,32 +124,36 @@ const Dashboard = ({ user }) => {
         </div>
       </header>
 
-      {/* Main Dashboard Content */}
-      <main className="container mx-auto px-4 py-6">
-        {/* Flow Management Section */}
-        <FlowManagement
-          onFlowSelect={handleFlowSelect}
-          selectedFlowId={selectedFlow?.id}
-        />
-
-        {/* Chat and File Management Section - align with flow selection boundaries */}
-        <div className="grid grid-cols-12 gap-4 mt-6">
-          {/* Chat Management - 8 columns (67%) - BIGGER */}
-          <div className="col-span-8">
-            <ChatManagement
-              selectedFlow={selectedFlow}
-              files={files}
-              messages={messages}
-              setMessages={setMessages}
+      {/* Main Dashboard Content - uses remaining space */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <div className="container mx-auto px-4 py-6 flex flex-col h-full">
+          {/* Flow Management Section - fixed height */}
+          <div className="flex-shrink-0 mb-6">
+            <FlowManagement
+              onFlowSelect={handleFlowSelect}
+              selectedFlowId={selectedFlow?.id}
             />
           </div>
 
-          {/* File Management - 4 columns (33%) */}
-          <div className="col-span-4">
-            <FileManagement
-              flowId={selectedFlow?.id}
-              setMessages={setMessages}
-            />
+          {/* Chat and File Management Section - takes remaining space and matches flow width */}
+          <div className="flex-1 flex gap-4 min-h-0">
+            {/* Chat Management - takes remaining space after file management */}
+            <div className="flex-1">
+              <ChatManagement
+                selectedFlow={selectedFlow}
+                files={files}
+                messages={messages}
+                setMessages={setMessages}
+              />
+            </div>
+
+            {/* File Management - fixed width to match flow management alignment */}
+            <div className="w-80 flex-shrink-0">
+              <FileManagement
+                flowId={selectedFlow?.id}
+                setMessages={setMessages}
+              />
+            </div>
           </div>
         </div>
       </main>
