@@ -57,7 +57,7 @@ async def create_collection(
         collection_name = construct_collection_name(flow_id)
 
         print(f"Testing embedding model: {embedding_model}")
-        test_result = test_embedding_model(embedding_model, OLLAMA_URL)
+        test_result = test_embedding_model(embedding_model)
 
         if not test_result["success"]:
             raise HTTPException(

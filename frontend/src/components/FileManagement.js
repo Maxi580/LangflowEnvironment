@@ -9,12 +9,12 @@ const FileManagement = ({
   flowId,
   setMessages
 }) => {
-  // Component state
   const [files, setFiles] = useState([]);
   const [isFilesLoading, setIsFilesLoading] = useState(false);
   const [filesError, setFilesError] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isDragging, setIsDragging] = useState(false); // Add drag state
 
   // Refs
   const fileInputRef = useRef(null);
@@ -54,7 +54,46 @@ const FileManagement = ({
   };
 
   /**
-   * Handles file upload
+   * Drag and drop event handlers
+   */
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!flowId || isUploading) return;
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set dragging to false if we're leaving the drop zone entirely
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!flowId || isUploading) return;
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (!flowId || isUploading) return;
+
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    if (droppedFiles.length > 0) {
+      handleFileUpload({ target: { files: droppedFiles } });
+    }
+  };
+
+  /**
+   * Handles file upload (works for both drag/drop and click upload)
    */
   const handleFileUpload = async (event) => {
     const filesToUpload = event.target.files;
@@ -134,6 +173,18 @@ const FileManagement = ({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
         </svg>
       );
+    } else if (fileType === 'pptx') {
+      return (
+        <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      );
+    } else if (fileType === 'xlsx') {
+      return (
+        <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2-2V5a2 2 0 012-2h6l2 2v8a2 2 0 01-2 2H9zm3-10v4m3-4v4" />
+        </svg>
+      );
     }
     return (
       <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -178,13 +229,22 @@ const FileManagement = ({
 
       {/* Content */}
       <div className="p-4 space-y-4">
-        {/* Upload Section */}
+        {/* Upload Section with Drag and Drop */}
         <div>
-          <label className={`flex items-center justify-center w-full px-3 py-2 text-sm border-2 border-dashed rounded-lg transition-colors
-            ${!flowId || isUploading 
-              ? 'border-slate-600 text-slate-500 cursor-not-allowed' 
-              : 'border-slate-500 text-slate-300 hover:border-blue-500 hover:text-blue-400 cursor-pointer'
-            }`}>
+          <div
+            className={`flex items-center justify-center w-full px-3 py-2 text-sm border-2 border-dashed rounded-lg transition-colors cursor-pointer
+              ${!flowId || isUploading 
+                ? 'border-slate-600 text-slate-500 cursor-not-allowed' 
+                : isDragging
+                  ? 'border-blue-500 bg-blue-500/10 text-blue-400'
+                  : 'border-slate-500 text-slate-300 hover:border-blue-500 hover:text-blue-400'
+              }`}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            onClick={() => !isUploading && flowId && fileInputRef.current?.click()}
+          >
             {isUploading ? (
               <>
                 <svg className="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24">
@@ -192,6 +252,13 @@ const FileManagement = ({
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
                 Uploading...
+              </>
+            ) : isDragging ? (
+              <>
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                Drop files here to upload
               </>
             ) : (
               <>
@@ -206,10 +273,11 @@ const FileManagement = ({
               type="file"
               multiple
               onChange={handleFileUpload}
+              accept=".pdf,.txt,.md,.py,.js,.html,.css,.json,.xml,.csv,.pptx,.xlsx"
               className="sr-only"
               disabled={isUploading || !flowId}
             />
-          </label>
+          </div>
         </div>
 
         {/* Files Loading */}
@@ -288,7 +356,7 @@ const FileManagement = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             <p className="text-slate-400 text-sm">No files uploaded</p>
-            <p className="text-slate-500 text-xs mt-1">Upload files to enhance conversations</p>
+            <p className="text-slate-500 text-xs mt-1">Drag & drop files or click to upload</p>
           </div>
         )}
 
