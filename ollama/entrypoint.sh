@@ -24,9 +24,10 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
+
 if [ -z "$OLLAMA_MODELS" ]; then
-  echo "OLLAMA_MODELS not set, using default model: nomic-embed-text"
-  OLLAMA_MODELS="nomic-embed-text"
+  echo "OLLAMA_MODELS not set, using default models: nomic-embed-text,tinyllama:1.1b"
+  OLLAMA_MODELS="nomic-embed-text,tinyllama:1.1b"
 else
   echo "Using models from environment: $OLLAMA_MODELS"
 fi
@@ -51,6 +52,6 @@ for model in "${MODELS[@]}"; do
   fi
 done
 
-echo "Embedding Model setup complete!"
+echo "Model setup complete!"
 
 wait $OLLAMA_PID
