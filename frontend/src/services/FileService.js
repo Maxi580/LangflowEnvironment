@@ -3,7 +3,7 @@ import TokenRefreshService from './TokenRefreshService';
 
 /**
  * Service for managing files and collections in the application
- * Updated to match the exact backend API structure
+ * Updated to use automatic backend model selection
  */
 class FileService {
   /**
@@ -34,10 +34,9 @@ class FileService {
   /**
    * Creates a new collection using flow_id
    * @param {string} flowId - Flow ID to use as collection identifier
-   * @param {string} embeddingModel - Embedding model to use (default: 'nomic-embed-text')
    * @returns {Promise<Object>} - Result of the creation operation
    */
-  async createCollection(flowId, embeddingModel = 'nomic-embed-text') {
+  async createCollection(flowId) {
     if (!flowId) {
       throw new Error("Flow ID is required");
     }
@@ -47,10 +46,8 @@ class FileService {
       const response = await TokenRefreshService.authenticatedFetch(
         config.api.getCollectionCreateUrl(flowId),
         {
-          method: 'POST',
-          body: JSON.stringify({
-            embedding_model: embeddingModel
-          })
+          method: 'POST'
+          // Backend uses automatic model selection - no body needed
         }
       );
 
@@ -140,7 +137,6 @@ class FileService {
    * @param {FileList|File[]} files - Files to upload
    * @param {string} flowId - Flow ID (collection identifier)
    * @param {Object} options - Upload options
-   * @param {string} options.embeddingModel - Embedding model to use
    * @param {number} options.chunkSize - Chunk size for text splitting
    * @param {number} options.chunkOverlap - Chunk overlap for text splitting
    * @returns {Promise<Object>} - Result of the upload operation
@@ -155,7 +151,6 @@ class FileService {
     }
 
     const {
-      embeddingModel = 'nomic-embed-text',
       chunkSize = 1000,
       chunkOverlap = 200
     } = options;
@@ -163,7 +158,7 @@ class FileService {
     try {
       // Ensure collection exists first
       try {
-        await this.createCollection(flowId, embeddingModel);
+        await this.createCollection(flowId);
       } catch (error) {
         // If collection already exists, that's fine
         if (!error.message.includes('already exists')) {
@@ -178,7 +173,6 @@ class FileService {
         const file = files[i];
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('embedding_model', embeddingModel);
         formData.append('chunk_size', chunkSize.toString());
         formData.append('chunk_overlap', chunkOverlap.toString());
 
@@ -253,7 +247,6 @@ class FileService {
         url.toString(),
         {
           method: 'DELETE'
-          // No body needed - file_path is now a query parameter
         }
       );
 
@@ -265,31 +258,6 @@ class FileService {
       return await response.json();
     } catch (error) {
       console.error('Error deleting file:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Gets available embedding models from the backend
-   * @returns {Promise<Array>} - List of available embedding models
-   */
-  async getEmbeddingModels() {
-    try {
-      const response = await TokenRefreshService.authenticatedFetch(
-        config.api.getModelsUrl(),
-        {
-          method: 'GET'
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch models: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.models || [];
-    } catch (error) {
-      console.error('Error fetching embedding models:', error);
       throw error;
     }
   }

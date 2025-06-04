@@ -22,6 +22,8 @@ USERS_REFRESH_TOKEN_ENDPOINT = os.getenv("USERS_REFRESH_TOKEN_ENDPOINT")
 USERS_LOGOUT_ENDPOINT = os.getenv("USERS_LOGOUT_ENDPOINT")
 USERS_VERIFY_AUTH_ENDPOINT = os.getenv("USERS_VERIFY_AUTH_ENDPOINT")
 USERS_AUTH_STATUS_ENDPOINT = os.getenv("USERS_AUTH_STATUS_ENDPOINT")
+ACCESS_TOKEN_COOKIE = "dashboard_access_token"
+REFRESH_TOKEN_COOKIE = "dashboard_refresh_token"
 
 router = APIRouter(prefix=USERS_BASE_ENDPOINT, tags=["users"])
 
@@ -219,10 +221,9 @@ async def login(
             except Exception as e:
                 print(f"Error decoding refresh token, using default expiry: {e}")
 
-        port = str(request.url.port or (443 if request.url.scheme == "https" else 80))
-
+        # ✅ Use constants for cookie names
         response.set_cookie(
-            key=f"p{port}_access_token",
+            key=ACCESS_TOKEN_COOKIE,
             value=access_token,
             httponly=True,
             secure=request.url.scheme == "https",
@@ -233,33 +234,12 @@ async def login(
 
         if refresh_token:
             response.set_cookie(
-                key=f"p{port}_refresh_token",
+                key=REFRESH_TOKEN_COOKIE,
                 value=refresh_token,
                 httponly=True,
                 secure=request.url.scheme == "https",
                 samesite="strict",
                 max_age=refresh_token_max_age,
-                path="/"
-            )
-
-        response.set_cookie(
-            key=f"p{port}_username",
-            value=user.username,
-            httponly=False,
-            secure=request.url.scheme == "https",
-            samesite="strict",
-            max_age=access_token_max_age,
-            path="/"
-        )
-
-        if user_id:
-            response.set_cookie(
-                key=f"p{port}_user_id",
-                value=str(user_id),
-                httponly=False,
-                secure=request.url.scheme == "https",
-                samesite="strict",
-                max_age=access_token_max_age,
                 path="/"
             )
 
@@ -295,8 +275,8 @@ async def refresh_token(request: Request, response: Response) -> Dict[str, Any]:
     Frontend calls this when getting 401 errors
     """
     try:
-        port = str(request.url.port or (443 if request.url.scheme == "https" else 80))
-        refresh_token = request.cookies.get(f"p{port}_refresh_token")
+        # ✅ Use constants for cookie names
+        refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)
 
         if not refresh_token:
             return {
@@ -366,8 +346,9 @@ async def refresh_token(request: Request, response: Response) -> Dict[str, Any]:
             except Exception as e:
                 print(f"Error decoding new refresh token, using default expiry: {e}")
 
+        # ✅ Use constants for cookie names
         response.set_cookie(
-            key=f"p{port}_access_token",
+            key=ACCESS_TOKEN_COOKIE,
             value=new_access_token,
             httponly=True,
             secure=request.url.scheme == "https",
@@ -378,7 +359,7 @@ async def refresh_token(request: Request, response: Response) -> Dict[str, Any]:
 
         if new_refresh_token:
             response.set_cookie(
-                key=f"p{port}_refresh_token",
+                key=REFRESH_TOKEN_COOKIE,
                 value=new_refresh_token,
                 httponly=True,
                 secure=request.url.scheme == "https",
@@ -418,8 +399,8 @@ async def logout(request: Request, response: Response) -> Dict[str, Any]:
     Logout user by calling Langflow logout endpoint and deleting ALL cookies
     """
     try:
-        port = str(request.url.port or (443 if request.url.scheme == "https" else 80))
-        access_token = request.cookies.get(f"p{port}_access_token")
+        # ✅ Use constants for cookie names
+        access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
 
         langflow_logout_success = False
 
@@ -478,10 +459,8 @@ async def logout(request: Request, response: Response) -> Dict[str, Any]:
 @router.get(USERS_VERIFY_AUTH_ENDPOINT)
 async def verify_auth(request: Request) -> Dict[str, Any]:
     try:
-        port = str(request.url.port or (443 if request.url.scheme == "https" else 80))
-        access_token = request.cookies.get(f"p{port}_access_token")
-        username = request.cookies.get(f"p{port}_username")
-        user_id = request.cookies.get(f"p{port}_user_id")
+        # ✅ Use constants for cookie names
+        access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
 
         if not access_token:
             return {
@@ -499,6 +478,10 @@ async def verify_auth(request: Request) -> Dict[str, Any]:
                     "authenticated": False,
                     "message": "Access token expired"
                 }
+
+            # ✅ Get username from JWT token
+            username = user_info.get("username") or user_info.get("preferred_username") or user_info.get("name")
+            user_id = user_info.get("sub") or user_info.get("user_id")
 
             return {
                 "authenticated": True,
@@ -528,11 +511,9 @@ async def verify_auth(request: Request) -> Dict[str, Any]:
 @router.get(USERS_AUTH_STATUS_ENDPOINT)
 async def get_auth_status(request: Request) -> Dict[str, Any]:
     try:
-        port = str(request.url.port or (443 if request.url.scheme == "https" else 80))
-        access_token = request.cookies.get(f"p{port}_access_token")
-        refresh_token = request.cookies.get(f"p{port}_refresh_token")
-        username = request.cookies.get(f"p{port}_username")
-        user_id = request.cookies.get(f"p{port}_user_id")
+        # ✅ Use constants for cookie names - this endpoint can stay as-is since it's not used
+        access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
+        refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)
 
         if not access_token:
             return {
@@ -563,6 +544,10 @@ async def get_auth_status(request: Request) -> Dict[str, Any]:
                     print(f"Error decoding refresh token: {e}")
 
             is_authenticated = access_token_valid or refresh_token_valid
+
+            # ✅ Get username from JWT token instead of cookies
+            username = user_info.get("username") or user_info.get("preferred_username") or user_info.get("name")
+            user_id = user_info.get("sub") or user_info.get("user_id")
 
             return {
                 "authenticated": is_authenticated,

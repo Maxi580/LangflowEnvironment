@@ -14,7 +14,6 @@ router = APIRouter(prefix=REDIRECT_BASE_ENDPOINT, tags=["redirect"])
 @router.get(REDIRECT_LANGFLOW_ENDPOINT)
 async def redirect_to_langflow(
         request: Request,
-        redirect_url: Optional[str] = None
 ):
     """Redirect to Langflow with automatic login"""
     access_token, refresh_token = get_user_tokens(request)

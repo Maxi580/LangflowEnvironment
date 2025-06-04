@@ -185,6 +185,12 @@ const FileManagement = ({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2-2V5a2 2 0 012-2h6l2 2v8a2 2 0 01-2 2H9zm3-10v4m3-4v4" />
         </svg>
       );
+    } else if (fileType === 'image' || fileType === 'jpg' || fileType === 'jpeg' || fileType === 'png' || fileType === 'gif' || fileType === 'bmp' || fileType === 'tiff' || fileType === 'webp') {
+      return (
+        <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      );
     }
     return (
       <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -273,7 +279,7 @@ const FileManagement = ({
               type="file"
               multiple
               onChange={handleFileUpload}
-              accept=".pdf,.txt,.md,.py,.js,.html,.css,.json,.xml,.csv,.pptx,.xlsx"
+              accept=".pdf,.txt,.md,.py,.js,.html,.css,.json,.xml,.csv,.pptx,.xlsx,.jpg,.jpeg,.png,.gif,.bmp,.tiff,.webp"
               className="sr-only"
               disabled={isUploading || !flowId}
             />

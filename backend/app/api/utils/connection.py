@@ -2,11 +2,19 @@ import os
 import requests
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
-from .collection_helper import get_ollama_embedding
+from .file_helper import get_ollama_embedding
 
 OLLAMA_URL = os.getenv("INTERNAL_OLLAMA_URL", "http://ollama:11434")
 QDRANT_URL = os.getenv("INTERNAL_QDRANT_URL", "http://qdrant:6333")
 LANGFLOW_URL = os.getenv("LANGFLOW_INTERNAL_URL", "http://langflow:7860")
+
+OLLAMA_TAGS_ENDPOINT = os.getenv("OLLAMA_TAGS_ENDPOINT", "/api/tags")
+OLLAMA_EMBEDDINGS_ENDPOINT = os.getenv("OLLAMA_EMBEDDINGS_ENDPOINT", "/api/embeddings")
+OLLAMA_GENERATE_ENDPOINT = os.getenv("OLLAMA_GENERATE_ENDPOINT", "/api/generate")
+
+QDRANT_COLLECTIONS_ENDPOINT = os.getenv("QDRANT_COLLECTIONS_ENDPOINT", "/collections")
+LANGFLOW_HEALTH_ENDPOINT = os.getenv("LANGFLOW_HEALTH_ENDPOINT", "/health")
+
 DEFAULT_EMBEDDING_MODEL = os.getenv("DEFAULT_EMBEDDING_MODEL", "nomic-embed-text")
 DEFAULT_CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
 DEFAULT_CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
@@ -15,7 +23,7 @@ DEFAULT_COLLECTION = os.getenv("DEFAULT_COLLECTION", "langflow_documents")
 
 def check_ollama_connection(base_url: str = OLLAMA_URL) -> bool:
     try:
-        response = requests.get(f"{base_url}/api/tags")
+        response = requests.get(f"{base_url}{OLLAMA_TAGS_ENDPOINT}")
         if response.status_code == 200:
             print("✓ Ollama connection successful")
             models = response.json().get("models", [])
@@ -32,7 +40,7 @@ def check_ollama_connection(base_url: str = OLLAMA_URL) -> bool:
 
 def check_qdrant_connection(url: str = QDRANT_URL, flow_id: str = None) -> bool:
     try:
-        response = requests.get(f"{url}/collections")
+        response = requests.get(f"{url}{QDRANT_COLLECTIONS_ENDPOINT}")
         if response.status_code == 200:
             print("✓ Qdrant connection successful")
             collections = response.json().get("result", {}).get("collections", [])
@@ -45,7 +53,6 @@ def check_qdrant_connection(url: str = QDRANT_URL, flow_id: str = None) -> bool:
                 try:
                     sample_embedding = get_ollama_embedding(
                         "Sample text for collection initialization",
-                        DEFAULT_EMBEDDING_MODEL
                     )
                     vector_size = len(sample_embedding)
 
@@ -73,7 +80,7 @@ def check_qdrant_connection(url: str = QDRANT_URL, flow_id: str = None) -> bool:
 def check_langflow_connection(base_url: str = LANGFLOW_URL) -> bool:
     """Check if Langflow service is running using the health_check endpoint"""
     try:
-        url = f"{base_url}/health"
+        url = f"{base_url}{LANGFLOW_HEALTH_ENDPOINT}"
         headers = {
             'Accept': 'application/json'
         }

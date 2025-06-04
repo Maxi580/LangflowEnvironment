@@ -2,11 +2,9 @@ import config from '../config';
 import CookieHelper from '../utils/CookieHelper';
 import TokenRefreshService from "./TokenRefreshService";
 
-
 class UserService {
   constructor() {
-    this.USERNAME_COOKIE = 'username';
-    this.USER_ID_COOKIE = 'user_id';
+    this.currentUser = null;
   }
 
   /**
@@ -42,19 +40,20 @@ class UserService {
         throw new Error(responseData.message || 'Login failed');
       }
 
-      // Store user data in client-side cookies for quick access
-      this.storeUserData(responseData.user.username, responseData.user.userId);
+      this.currentUser = {
+        username: responseData.user.username,
+        userId: responseData.user.userId,
+        tokenExpiry: responseData.user.tokenExpiry,
+        isAuthenticated: true
+      };
 
       return {
         success: true,
-        user: {
-          username: responseData.user.username,
-          userId: responseData.user.userId,
-          tokenExpiry: responseData.user.tokenExpiry
-        }
+        user: this.currentUser
       };
 
     } catch (error) {
+      this.currentUser = null;
       throw new Error(`Login failed: ${error.message}`);
     }
   }
@@ -86,7 +85,6 @@ class UserService {
         let errorMessage = 'Registration failed';
         if (responseData.message) {
           try {
-            // Handle nested error messages from backend
             const nestedError = JSON.parse(responseData.message.replace('Failed to create user: ', ''));
             errorMessage = nestedError.detail || responseData.message;
           } catch {
@@ -172,6 +170,8 @@ class UserService {
 
       const result = await response.json().catch(() => ({ success: true }));
 
+      this.currentUser = null;
+
       return {
         success: true,
         message: result.message || 'Logged out successfully',
@@ -181,7 +181,8 @@ class UserService {
     } catch (error) {
       console.warn('Backend logout failed:', error);
 
-      // Fallback: try to clear what we can on frontend
+      this.currentUser = null;
+
       const clearedCookies = CookieHelper.clearAllCookies();
 
       return {
@@ -193,26 +194,16 @@ class UserService {
   }
 
   /**
-   * Get current user information from local cookies
+   * Get current user information
    * @returns {Object|null} - User data or null
    */
   getCurrentUser() {
-    const username = CookieHelper.getCookie(this.USERNAME_COOKIE);
-    const userId = CookieHelper.getCookie(this.USER_ID_COOKIE);
-
-    if (!username) {
-      return null;
-    }
-
-    return {
-      username,
-      userId,
-      isAuthenticated: true
-    };
+    return this.currentUser;
   }
 
   /**
    * Check if user is authenticated via backend verification
+   * Also fetches and stores user data for page refreshes
    * @returns {Promise<boolean>} - Authentication status
    */
   async isAuthenticated() {
@@ -222,56 +213,29 @@ class UserService {
       });
 
       if (!response.ok) {
+        this.currentUser = null;
         return false;
       }
 
       const result = await response.json();
-      return result.authenticated || false;
+
+      if (result.authenticated && result.user) {
+        this.currentUser = {
+          username: result.user.username,
+          userId: result.user.userId,
+          tokenExpiry: result.user.tokenExpiry,
+          isAuthenticated: true
+        };
+        return true;
+      } else {
+        this.currentUser = null;
+        return false;
+      }
 
     } catch (error) {
       console.warn('Auth check failed:', error);
+      this.currentUser = null;
       return false;
-    }
-  }
-
-  /**
-   * Get detailed authentication status from backend
-   * @returns {Promise<Object>} - Detailed auth status
-   */
-  async getAuthStatus() {
-    try {
-      const response = await fetch(config.api.getUsersAuthStatusUrl(), {
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        return {
-          isAuthenticated: false,
-          user: null,
-          tokens: null
-        };
-      }
-
-      const result = await response.json();
-      const localUser = this.getCurrentUser();
-
-      return {
-        isAuthenticated: result.authenticated,
-        user: result.authenticated ? {
-          ...result.user,
-          ...localUser // Merge backend user data with local data
-        } : null,
-        tokens: result.tokens || null,
-        message: result.message
-      };
-
-    } catch (error) {
-      console.warn('Auth status check failed:', error);
-      return {
-        isAuthenticated: false,
-        user: null,
-        tokens: null
-      };
     }
   }
 
@@ -284,33 +248,6 @@ class UserService {
     if (!credentials.username || !credentials.password) {
       throw new Error("Username and password are required");
     }
-  }
-
-  /**
-   * Store user data in client-side cookies
-   * @param {string} username - Username
-   * @param {string} userId - User ID
-   */
-  storeUserData(username, userId) {
-    CookieHelper.setCookie(this.USERNAME_COOKIE, username, {
-      secure: window.location.protocol === 'https:',
-      sameSite: 'Strict'
-    });
-
-    if (userId) {
-      CookieHelper.setCookie(this.USER_ID_COOKIE, userId, {
-        secure: window.location.protocol === 'https:',
-        sameSite: 'Strict'
-      });
-    }
-  }
-
-  /**
-   * Clear user data from client-side cookies
-   */
-  clearUserData() {
-    CookieHelper.deleteCookie(this.USERNAME_COOKIE);
-    CookieHelper.deleteCookie(this.USER_ID_COOKIE);
   }
 }
 

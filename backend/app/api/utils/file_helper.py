@@ -2,6 +2,7 @@ import os
 import time
 from pathlib import Path
 from fastapi import Request
+import base64
 
 import requests
 import uuid
@@ -11,15 +12,19 @@ from qdrant_client.models import Distance, VectorParams
 import PyPDF2
 import mimetypes
 from pptx import Presentation
-from openpyxl import load_workbook  # Add this import for Excel support
+from openpyxl import load_workbook
 from ..routes.flows import get_flows
 
-OLLAMA_URL = os.getenv("INTERNAL_OLLAMA_URL", "http://ollama:11434")
-QDRANT_URL = os.getenv("INTERNAL_QDRANT_URL", "http://qdrant:6333")
-DEFAULT_EMBEDDING_MODEL = os.getenv("DEFAULT_EMBEDDING_MODEL", "nomic-embed-text")
-DEFAULT_CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
-DEFAULT_CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
-DEFAULT_COLLECTION = os.getenv("DEFAULT_COLLECTION", "langflow_documents")
+OLLAMA_URL = os.getenv("OLLAMA_INTERNAL_URL")
+QDRANT_URL = os.getenv("QDRANT_INTERNAL_URL")
+DEFAULT_EMBEDDING_MODEL = os.getenv("DEFAULT_EMBEDDING_MODEL")
+DEFAULT_VISION_MODEL = os.getenv("DEFAULT_VISION_MODEL")
+DEFAULT_CHUNK_SIZE = int(os.getenv("CHUNK_SIZE"))
+DEFAULT_CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP"))
+
+OLLAMA_TAGS_ENDPOINT = os.getenv("OLLAMA_TAGS_ENDPOINT", "/api/tags")
+OLLAMA_EMBEDDINGS_ENDPOINT = os.getenv("OLLAMA_EMBEDDINGS_ENDPOINT", "/api/embeddings")
+OLLAMA_GENERATE_ENDPOINT = os.getenv("OLLAMA_GENERATE_ENDPOINT", "/api/generate")
 
 
 def construct_collection_name(flow_id: str):
@@ -38,8 +43,75 @@ async def verify_user_flow_access(request: Request, flow_id: str) -> bool:
         return False
 
 
-def get_ollama_embedding(text: str, model: str = DEFAULT_EMBEDDING_MODEL) -> List[float]:
-    url = f"{OLLAMA_URL}/api/embeddings"
+def get_available_models() -> Dict[str, List[str]]:
+    """Get all available models from Ollama and categorize them"""
+    try:
+        url = f"{OLLAMA_URL}{OLLAMA_TAGS_ENDPOINT}"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
+        models = [model["name"] for model in data.get("models", [])]
+
+        embedding_models = []
+        vision_models = []
+        chat_models = []
+
+        for model in models:
+            model_lower = model.lower()
+            if "embed" in model_lower:
+                embedding_models.append(model)
+            elif any(vision_name in model_lower for vision_name in ["llava", "bakllava", "moondream"]):
+                vision_models.append(model)
+            else:
+                chat_models.append(model)
+
+        return {
+            "embedding": embedding_models,
+            "vision": vision_models,
+            "chat": chat_models,
+            "all": models
+        }
+
+    except Exception as e:
+        print(f"Error getting available models: {e}")
+        return {
+            "embedding": [],
+            "vision": [],
+            "chat": [],
+            "all": []
+        }
+
+
+def get_best_embedding_model() -> str:
+    configured_model = os.getenv("DEFAULT_EMBEDDING_MODEL", "nomic-embed-text")
+
+    available = get_available_models()
+    if configured_model in available["all"]:
+        return configured_model
+
+    if available["embedding"]:
+        return available["embedding"][0]
+
+    return "nomic-embed-text"
+
+
+def get_best_vision_model() -> str:
+    configured_model = os.getenv("DEFAULT_VISION_MODEL", "llava:7b")
+
+    available = get_available_models()
+    if configured_model in available["all"]:
+        return configured_model
+
+    if available["vision"]:
+        return available["vision"][0]
+
+    return "llava:7b"
+
+
+def get_ollama_embedding(text: str) -> List[float]:
+    url = f"{OLLAMA_URL}{OLLAMA_EMBEDDINGS_ENDPOINT}"
+    model = get_best_embedding_model()
     payload = {
         "model": model,
         "prompt": text
@@ -94,7 +166,6 @@ def get_ollama_embedding(text: str, model: str = DEFAULT_EMBEDDING_MODEL) -> Lis
         raise ValueError(f"Error connecting to Ollama API: {str(e)}")
 
     except ValueError:
-        # Re-raise ValueError as-is
         raise
 
     except Exception as e:
@@ -102,12 +173,35 @@ def get_ollama_embedding(text: str, model: str = DEFAULT_EMBEDDING_MODEL) -> Lis
         raise ValueError(f"Unexpected error getting embedding from model {model}: {str(e)}")
 
 
-def test_embedding_model(model: str, base_url: str = OLLAMA_URL) -> Dict[str, Any]:
+def get_ollama_image_description(image_path: str) -> str:
+    url = f"{OLLAMA_URL}{OLLAMA_GENERATE_ENDPOINT}"
+    model = get_best_vision_model()
+
+    with open(image_path, "rb") as image_file:
+        image_data = base64.b64encode(image_file.read()).decode('utf-8')
+
+    payload = {
+        "model": model,
+        "prompt": "Describe this image in detail, including objects, people, text, colors, and setting.",
+        "images": [image_data],
+        "stream": False
+    }
+
+    response = requests.post(url, json=payload, timeout=1200)
+    response.raise_for_status()
+    result = response.json()
+
+    return result.get("response", "").strip()
+
+
+def test_embedding_model() -> Dict[str, Any]:
     try:
+        model = get_best_embedding_model()
+
         test_text = "This is a test sentence for embedding dimension detection."
 
         start_time = time.time()
-        embedding = get_ollama_embedding(test_text, model)
+        embedding = get_ollama_embedding(test_text)
         response_time = time.time() - start_time
 
         return {
@@ -122,7 +216,6 @@ def test_embedding_model(model: str, base_url: str = OLLAMA_URL) -> Dict[str, An
     except Exception as e:
         return {
             "success": False,
-            "model_name": model,
             "error": str(e),
             "vector_size": None
         }
@@ -159,17 +252,17 @@ def detect_file_type(file_path: str) -> str:
     _, ext = os.path.splitext(file_path)
     ext = ext.lower()
 
-    # Direct extension matching
     if ext == '.pdf':
         return 'pdf'
     elif ext == '.pptx':
         return 'pptx'
-    elif ext == '.xlsx':  # Add Excel support
+    elif ext == '.xlsx':
         return 'xlsx'
+    if ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']:
+        return 'image'
     elif ext in ['.txt', '.md', '.py', '.js', '.html', '.css', '.json', '.xml', '.csv']:
         return 'text'
 
-    # MIME type fallback
     mime_type, _ = mimetypes.guess_type(file_path)
     if mime_type:
         if mime_type == 'application/pdf':
@@ -181,7 +274,6 @@ def detect_file_type(file_path: str) -> str:
         elif mime_type.startswith('text/'):
             return 'text'
 
-    # Final fallback - try to read as text
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             f.read(1024)
@@ -223,8 +315,7 @@ def extract_text_from_xlsx(file_path: str) -> str:
 
         for sheet_name in workbook.sheetnames:
             worksheet = workbook[sheet_name]
-            sheet_text = []
-            sheet_text.append(f"=== WORKSHEET: {sheet_name} ===")
+            sheet_text = [f"=== WORKSHEET: {sheet_name} ==="]
 
             max_row = worksheet.max_row
             max_col = worksheet.max_column
@@ -293,10 +384,8 @@ def extract_text_from_pptx(file_path: str) -> str:
         presentation = Presentation(file_path)
 
         for slide_num, slide in enumerate(presentation.slides, 1):
-            slide_text = []
-            slide_text.append(f"=== SLIDE {slide_num} ===")
+            slide_text = [f"=== SLIDE {slide_num} ==="]
 
-            # Extract text from all shapes in the slide
             for shape in slide.shapes:
                 if hasattr(shape, "text") and shape.text.strip():
                     slide_text.append(shape.text.strip())
@@ -353,6 +442,9 @@ def read_file_content(file_path: str) -> Tuple[str, str]:
     elif file_type == 'xlsx':
         content = extract_text_from_xlsx(file_path)
         return content, 'xlsx'
+    elif file_type == 'image':
+        description = get_ollama_image_description(file_path)
+        return description, 'image'
     else:
         raise ValueError(f"Unsupported file type '{file_type}' for {file_path}")
 
@@ -362,7 +454,6 @@ def upload_to_qdrant(
         file_name: str,
         file_id: str,
         flow_id: str = None,
-        embedding_model: str = DEFAULT_EMBEDDING_MODEL,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
         qdrant_url: str = QDRANT_URL,
@@ -383,8 +474,8 @@ def upload_to_qdrant(
 
         sample_embedding = get_ollama_embedding(
             "Sample text for dimension testing",
-            embedding_model,
         )
+
         vector_size = len(sample_embedding)
         print(f"Sample embedding size: {vector_size}")
 
@@ -418,7 +509,7 @@ def upload_to_qdrant(
             if chunk_idx % 5 == 0:
                 print(f"Processing chunk {chunk_idx + 1}/{len(chunks)}")
 
-            embedding = get_ollama_embedding(chunk, embedding_model)
+            embedding = get_ollama_embedding(chunk)
             point_id = str(uuid.uuid4())
 
             points.append({

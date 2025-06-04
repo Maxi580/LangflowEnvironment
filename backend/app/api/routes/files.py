@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 from ..utils.jwt_helper import get_user_token
-from ..utils.collection_helper import (
+from ..utils.file_helper import (
     upload_to_qdrant,
     delete_file_from_qdrant,
     get_files_from_collection,
@@ -19,8 +19,8 @@ from ..utils.connection import check_qdrant_connection
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 
-QDRANT_URL = os.getenv("INTERNAL_QDRANT_URL")
-OLLAMA_URL = os.getenv("INTERNAL_OLLAMA_URL")
+QDRANT_URL = os.getenv("QDRANT_INTERNAL_URL")
+OLLAMA_URL = os.getenv("QDRANT_INTERNAL_URL")
 COLLECTIONS_BASE_ENDPOINT = os.getenv("COLLECTIONS_BASE_ENDPOINT")
 BACKEND_UPLOAD_DIR = os.getenv("BACKEND_UPLOAD_DIR")
 COLLECTIONS_FILES_ENDPOINT = os.getenv("COLLECTIONS_FILES_ENDPOINT", "/files")
@@ -33,7 +33,6 @@ router = APIRouter(prefix=COLLECTIONS_BASE_ENDPOINT, tags=["collections"])
 async def create_collection(
         request: Request,
         flow_id: str,
-        embedding_model: Optional[str] = "nomic-embed-text"
 ) -> Dict[str, Any]:
     """Create a new Qdrant collection using flow_id as collection name"""
     try:
@@ -55,14 +54,12 @@ async def create_collection(
             )
 
         collection_name = construct_collection_name(flow_id)
-
-        print(f"Testing embedding model: {embedding_model}")
-        test_result = test_embedding_model(embedding_model)
+        test_result = test_embedding_model()
 
         if not test_result["success"]:
             raise HTTPException(
                 status_code=500,
-                detail=f"Could not detect vector size for model '{embedding_model}': {test_result['error']}"
+                detail=f"Could not detect vector size for model: {test_result['error']}"
             )
 
         vector_size = test_result["vector_size"]
@@ -248,7 +245,6 @@ async def upload_file_to_collection(
         flow_id: str,
         background_tasks: BackgroundTasks,
         file: UploadFile = File(...),
-        embedding_model: Optional[str] = Form("nomic-embed-text"),
         chunk_size: Optional[int] = Form(1000),
         chunk_overlap: Optional[int] = Form(200)
 ) -> Dict[str, Any]:
@@ -317,7 +313,6 @@ async def upload_file_to_collection(
                     file_name=file.filename,
                     file_id=file_id,
                     flow_id=collection_name,
-                    embedding_model=embedding_model,
                     chunk_size=chunk_size,
                     chunk_overlap=chunk_overlap
                 )
