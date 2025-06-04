@@ -1,6 +1,6 @@
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
-from ..utils.connection import check_langflow_connection, check_qdrant_connection, check_ollama_connection
+from ..utils.health_checks import check_langflow_connection, check_qdrant_connection, check_ollama_connection
 from typing import Dict, Any
 import os
 

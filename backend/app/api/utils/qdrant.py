@@ -1,37 +1,32 @@
 import os
-import time
+import uuid
 from pathlib import Path
 from fastapi import Request
-import base64
-
-import requests
-import uuid
 from typing import List, Dict, Any, Optional, Tuple
+
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 import PyPDF2
 import mimetypes
 from pptx import Presentation
 from openpyxl import load_workbook
-from ..routes.flows import get_flows
 
-OLLAMA_URL = os.getenv("OLLAMA_INTERNAL_URL")
+from ..routes.flows import get_flows
+from .embedding import get_text_embedding, get_image_description, get_vector_size
+
+# Environment variables
 QDRANT_URL = os.getenv("QDRANT_INTERNAL_URL")
-DEFAULT_EMBEDDING_MODEL = os.getenv("DEFAULT_EMBEDDING_MODEL")
-DEFAULT_VISION_MODEL = os.getenv("DEFAULT_VISION_MODEL")
 DEFAULT_CHUNK_SIZE = int(os.getenv("CHUNK_SIZE"))
 DEFAULT_CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP"))
 
-OLLAMA_TAGS_ENDPOINT = os.getenv("OLLAMA_TAGS_ENDPOINT", "/api/tags")
-OLLAMA_EMBEDDINGS_ENDPOINT = os.getenv("OLLAMA_EMBEDDINGS_ENDPOINT", "/api/embeddings")
-OLLAMA_GENERATE_ENDPOINT = os.getenv("OLLAMA_GENERATE_ENDPOINT", "/api/generate")
-
 
 def construct_collection_name(flow_id: str):
+    """Construct collection name from flow ID"""
     return flow_id
 
 
 async def verify_user_flow_access(request: Request, flow_id: str) -> bool:
+    """Verify user has access to the specified flow"""
     try:
         print(f"Checking user access to flow: {flow_id}")
         flows = await get_flows(request, remove_example_flows=True, header_flows=False, get_all=True)
@@ -43,185 +38,8 @@ async def verify_user_flow_access(request: Request, flow_id: str) -> bool:
         return False
 
 
-def get_available_models() -> Dict[str, List[str]]:
-    """Get all available models from Ollama and categorize them"""
-    try:
-        url = f"{OLLAMA_URL}{OLLAMA_TAGS_ENDPOINT}"
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-
-        data = response.json()
-        models = [model["name"] for model in data.get("models", [])]
-
-        embedding_models = []
-        vision_models = []
-        chat_models = []
-
-        for model in models:
-            model_lower = model.lower()
-            if "embed" in model_lower:
-                embedding_models.append(model)
-            elif any(vision_name in model_lower for vision_name in ["llava", "bakllava", "moondream"]):
-                vision_models.append(model)
-            else:
-                chat_models.append(model)
-
-        return {
-            "embedding": embedding_models,
-            "vision": vision_models,
-            "chat": chat_models,
-            "all": models
-        }
-
-    except Exception as e:
-        print(f"Error getting available models: {e}")
-        return {
-            "embedding": [],
-            "vision": [],
-            "chat": [],
-            "all": []
-        }
-
-
-def get_best_embedding_model() -> str:
-    configured_model = os.getenv("DEFAULT_EMBEDDING_MODEL", "nomic-embed-text")
-
-    available = get_available_models()
-    if configured_model in available["all"]:
-        return configured_model
-
-    if available["embedding"]:
-        return available["embedding"][0]
-
-    return "nomic-embed-text"
-
-
-def get_best_vision_model() -> str:
-    configured_model = os.getenv("DEFAULT_VISION_MODEL", "llava:7b")
-
-    available = get_available_models()
-    if configured_model in available["all"]:
-        return configured_model
-
-    if available["vision"]:
-        return available["vision"][0]
-
-    return "llava:7b"
-
-
-def get_ollama_embedding(text: str) -> List[float]:
-    url = f"{OLLAMA_URL}{OLLAMA_EMBEDDINGS_ENDPOINT}"
-    model = get_best_embedding_model()
-    payload = {
-        "model": model,
-        "prompt": text
-    }
-
-    try:
-        print(f"Requesting embedding from {url} with model: {model}")
-        response = requests.post(url, json=payload, timeout=30)
-        response.raise_for_status()
-
-        result = response.json()
-        print(f"Ollama API response status: {response.status_code}")
-
-        # Validate response structure
-        if not isinstance(result, dict):
-            raise ValueError(f"Expected dict response, got {type(result)}")
-
-        embedding = result.get("embedding")
-        if embedding is None:
-            raise ValueError(f"No embedding field in response. Response keys: {list(result.keys())}")
-
-        # Validate embedding format
-        if not isinstance(embedding, list):
-            raise ValueError(f"Expected list for embedding, got {type(embedding)}")
-
-        if len(embedding) == 0:
-            raise ValueError("Received empty embedding")
-
-        # Validate that all elements are numbers
-        if not all(isinstance(x, (int, float)) for x in embedding):
-            raise ValueError("Embedding contains non-numeric values")
-
-        print(f"Successfully got embedding of size {len(embedding)} for model {model}")
-        return embedding
-
-    except requests.exceptions.Timeout:
-        print(f"Timeout connecting to Ollama API at {url}")
-        raise ValueError(f"Timeout connecting to Ollama API (model: {model})")
-
-    except requests.exceptions.ConnectionError:
-        print(f"Connection error to Ollama API at {url}")
-        raise ValueError(f"Cannot connect to Ollama API at {OLLAMA_URL} (model: {model})")
-
-    except requests.exceptions.RequestException as e:
-        print(f"Request error connecting to Ollama API: {e}")
-        if hasattr(e, 'response') and e.response is not None:
-            try:
-                error_detail = e.response.json()
-                raise ValueError(f"Ollama API error: {error_detail}")
-            except:
-                raise ValueError(f"Ollama API error: {e.response.text}")
-        raise ValueError(f"Error connecting to Ollama API: {str(e)}")
-
-    except ValueError:
-        raise
-
-    except Exception as e:
-        print(f"Unexpected error getting embedding: {e}")
-        raise ValueError(f"Unexpected error getting embedding from model {model}: {str(e)}")
-
-
-def get_ollama_image_description(image_path: str) -> str:
-    url = f"{OLLAMA_URL}{OLLAMA_GENERATE_ENDPOINT}"
-    model = get_best_vision_model()
-
-    with open(image_path, "rb") as image_file:
-        image_data = base64.b64encode(image_file.read()).decode('utf-8')
-
-    payload = {
-        "model": model,
-        "prompt": "Describe this image in detail, including objects, people, text, colors, and setting.",
-        "images": [image_data],
-        "stream": False
-    }
-
-    response = requests.post(url, json=payload, timeout=1200)
-    response.raise_for_status()
-    result = response.json()
-
-    return result.get("response", "").strip()
-
-
-def test_embedding_model() -> Dict[str, Any]:
-    try:
-        model = get_best_embedding_model()
-
-        test_text = "This is a test sentence for embedding dimension detection."
-
-        start_time = time.time()
-        embedding = get_ollama_embedding(test_text)
-        response_time = time.time() - start_time
-
-        return {
-            "success": True,
-            "model_name": model,
-            "vector_size": len(embedding),
-            "response_time_seconds": round(response_time, 3),
-            "sample_values": embedding[:5] if len(embedding) >= 5 else embedding,
-            "test_text": test_text
-        }
-
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "vector_size": None
-        }
-
-
 def is_file_in_qdrant(file_path: str, collection_name: str, qdrant_url: str = QDRANT_URL) -> bool:
+    """Check if a file already exists in the Qdrant collection"""
     try:
         client = QdrantClient(url=qdrant_url)
         response = client.scroll(
@@ -247,7 +65,7 @@ def is_file_in_qdrant(file_path: str, collection_name: str, qdrant_url: str = QD
 def detect_file_type(file_path: str) -> str:
     """
     Detect file type based on extension and MIME type
-    Now supports PDF, PowerPoint, Excel, and text files
+    Supports PDF, PowerPoint, Excel, images, and text files
     """
     _, ext = os.path.splitext(file_path)
     ext = ext.lower()
@@ -258,7 +76,7 @@ def detect_file_type(file_path: str) -> str:
         return 'pptx'
     elif ext == '.xlsx':
         return 'xlsx'
-    if ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']:
+    elif ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']:
         return 'image'
     elif ext in ['.txt', '.md', '.py', '.js', '.html', '.css', '.json', '.xml', '.csv']:
         return 'text'
@@ -320,6 +138,7 @@ def extract_text_from_xlsx(file_path: str) -> str:
             max_row = worksheet.max_row
             max_col = worksheet.max_column
 
+            # Find first non-empty row
             first_row = 1
             for row in range(1, max_row + 1):
                 if any(worksheet.cell(row, col).value is not None for col in range(1, max_col + 1)):
@@ -333,6 +152,7 @@ def extract_text_from_xlsx(file_path: str) -> str:
                     last_row = row
                     break
 
+            # Extract table data
             table_data = []
             for row in range(first_row, last_row + 1):
                 row_data = []
@@ -345,6 +165,7 @@ def extract_text_from_xlsx(file_path: str) -> str:
                         row_data.append("")
 
                 if any(cell.strip() for cell in row_data):
+                    # Remove trailing empty cells
                     while row_data and not row_data[-1].strip():
                         row_data.pop()
 
@@ -363,7 +184,6 @@ def extract_text_from_xlsx(file_path: str) -> str:
         workbook.close()
 
         result = "\n".join(text_content)
-
         if not result.strip():
             return "No data found in Excel file."
 
@@ -411,7 +231,6 @@ def extract_text_from_pptx(file_path: str) -> str:
                 text_content.append("")  # Add blank line between slides
 
         result = "\n".join(text_content)
-
         if not result.strip():
             return "No text content found in PowerPoint presentation."
 
@@ -443,7 +262,7 @@ def read_file_content(file_path: str) -> Tuple[str, str]:
         content = extract_text_from_xlsx(file_path)
         return content, 'xlsx'
     elif file_type == 'image':
-        description = get_ollama_image_description(file_path)
+        description = get_image_description(file_path)
         return description, 'image'
     else:
         raise ValueError(f"Unsupported file type '{file_type}' for {file_path}")
@@ -458,6 +277,9 @@ def upload_to_qdrant(
         chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
         qdrant_url: str = QDRANT_URL,
 ) -> bool:
+    """
+    Upload file content to Qdrant collection after chunking and embedding
+    """
     try:
         print(f"Processing file: {file_path}")
 
@@ -472,11 +294,7 @@ def upload_to_qdrant(
             print(f"Error: {str(e)}")
             return False
 
-        sample_embedding = get_ollama_embedding(
-            "Sample text for dimension testing",
-        )
-
-        vector_size = len(sample_embedding)
+        vector_size = get_vector_size()
         print(f"Sample embedding size: {vector_size}")
 
         client = QdrantClient(url=qdrant_url)
@@ -496,6 +314,7 @@ def upload_to_qdrant(
         else:
             print(f"Using existing collection: {collection_name}")
 
+        # Create chunks from content
         chunks = []
         for i in range(0, len(content), chunk_size - chunk_overlap):
             chunk = content[i:i + chunk_size]
@@ -504,12 +323,14 @@ def upload_to_qdrant(
 
         print(f"Created {len(chunks)} chunks")
 
+        # Process chunks and create points for Qdrant
         points = []
         for chunk_idx, chunk in enumerate(chunks):
             if chunk_idx % 5 == 0:
                 print(f"Processing chunk {chunk_idx + 1}/{len(chunks)}")
 
-            embedding = get_ollama_embedding(chunk)
+            # Get embedding for document content
+            embedding = get_text_embedding(chunk, task_type="document")
             point_id = str(uuid.uuid4())
 
             points.append({
@@ -528,6 +349,7 @@ def upload_to_qdrant(
                 }
             })
 
+        # Upload to Qdrant
         if points:
             client.upsert(
                 collection_name=collection_name,
@@ -549,10 +371,14 @@ def delete_file_from_qdrant(
         flow_id: str = None,
         qdrant_url: str = QDRANT_URL
 ) -> bool:
+    """
+    Delete all points related to a specific file from Qdrant collection
+    """
     try:
         collection_name = flow_id
         client = QdrantClient(url=qdrant_url)
 
+        # Find all points for this file
         response = client.scroll(
             collection_name=collection_name,
             scroll_filter={
@@ -575,6 +401,7 @@ def delete_file_from_qdrant(
             print(f"No points found for file: {file_path}")
             return True
 
+        # Delete the points
         client.delete(
             collection_name=collection_name,
             points_selector=point_ids
@@ -605,6 +432,7 @@ def get_files_from_collection(
     try:
         client = QdrantClient(url=qdrant_url)
 
+        # Check if collection exists
         collections = client.get_collections().collections
         collection_names = [collection.name for collection in collections]
 
@@ -612,6 +440,7 @@ def get_files_from_collection(
             print(f"Collection '{collection_name}' does not exist")
             return []
 
+        # Get all points from collection
         response = client.scroll(
             collection_name=collection_name,
             scroll_filter={},
@@ -620,6 +449,7 @@ def get_files_from_collection(
             limit=1000
         )
 
+        # Extract unique file information
         file_info_by_path = {}
         for point in response[0]:
             if "metadata" in point.payload:
@@ -639,7 +469,6 @@ def get_files_from_collection(
         for file_path, info in file_info_by_path.items():
             path_obj = Path(file_path)
             if path_obj.exists() and path_obj.is_file():
-                # Add file size
                 info["file_size"] = os.path.getsize(file_path)
                 files.append(info)
             else:

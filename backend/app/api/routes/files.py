@@ -6,21 +6,21 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 from ..utils.jwt_helper import get_user_token
-from ..utils.file_helper import (
+from ..utils.qdrant import (
     upload_to_qdrant,
     delete_file_from_qdrant,
     get_files_from_collection,
     is_file_in_qdrant,
-    test_embedding_model,
     construct_collection_name,
     verify_user_flow_access
 )
+from ..utils.embedding_helper import test_embedding_model
 from ..utils.connection import check_qdrant_connection
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 
+# Environment variables
 QDRANT_URL = os.getenv("QDRANT_INTERNAL_URL")
-OLLAMA_URL = os.getenv("QDRANT_INTERNAL_URL")
 COLLECTIONS_BASE_ENDPOINT = os.getenv("COLLECTIONS_BASE_ENDPOINT")
 BACKEND_UPLOAD_DIR = os.getenv("BACKEND_UPLOAD_DIR")
 COLLECTIONS_FILES_ENDPOINT = os.getenv("COLLECTIONS_FILES_ENDPOINT", "/files")
@@ -54,8 +54,8 @@ async def create_collection(
             )
 
         collection_name = construct_collection_name(flow_id)
-        test_result = test_embedding_model()
 
+        test_result = test_embedding_model()
         if not test_result["success"]:
             raise HTTPException(
                 status_code=500,
@@ -377,6 +377,7 @@ async def delete_file_from_collection(
 
         collection_name = construct_collection_name(flow_id)
 
+        # Check if collection exists
         client = QdrantClient(url=QDRANT_URL)
         collections = client.get_collections().collections
         existing_collection_names = [c.name for c in collections]
@@ -387,12 +388,14 @@ async def delete_file_from_collection(
                 detail=f"Collection for flow '{flow_id}' not found"
             )
 
+        # Check if file exists in Qdrant
         if not is_file_in_qdrant(file_path, collection_name):
             raise HTTPException(
                 status_code=404,
                 detail=f"File not found in collection for flow '{flow_id}'"
             )
 
+        # Delete file from Qdrant using helper function
         success = delete_file_from_qdrant(
             file_path=file_path,
             flow_id=collection_name
@@ -404,7 +407,9 @@ async def delete_file_from_collection(
                 detail="Failed to delete file from Qdrant collection"
             )
 
+        # Try to delete physical file as well
         file_path_obj = Path(file_path)
+        physical_file_deleted = False
         if file_path_obj.exists():
             try:
                 file_path_obj.unlink()
@@ -412,9 +417,6 @@ async def delete_file_from_collection(
                 physical_file_deleted = True
             except Exception as e:
                 print(f"Warning: Could not delete physical file {file_path_obj}: {e}")
-                physical_file_deleted = False
-        else:
-            physical_file_deleted = False
 
         return {
             "success": True,
