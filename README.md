@@ -18,7 +18,7 @@ This repository contains a Docker Compose setup for running Langflow with Ollama
 
 When configuring services within Langflow to talk to each other:
 
-| Service | Internal URL                                                                        | Notes |
-|---------|-------------------------------------------------------------------------------------|-------|
-| Ollama | http://ollama:11434 | Used by Langflow to send requests to Ollama |
-| Qdrant | http://qdrant:6333   | Used by Langflow to connect to Qdrant |
+| Service | Internal URL                                           | Notes |
+|---------|--------------------------------------------------------|-------|
+| Ollama | http://ollama:11434, http://host.docker.internal:11434 | Used by Langflow to send requests to Ollama |
+| Qdrant | http://qdrant:6333, http://host.docker.internal:6333   | Used by Langflow to connect to Qdrant |

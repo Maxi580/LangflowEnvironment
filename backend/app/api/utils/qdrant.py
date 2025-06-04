@@ -14,7 +14,7 @@ from openpyxl import load_workbook
 from ..routes.flows import get_flows
 from .embedding import get_text_embedding, get_image_description, get_vector_size
 
-# Environment variables
+
 QDRANT_URL = os.getenv("QDRANT_INTERNAL_URL")
 DEFAULT_CHUNK_SIZE = int(os.getenv("CHUNK_SIZE"))
 DEFAULT_CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP"))
@@ -70,6 +70,7 @@ def detect_file_type(file_path: str) -> str:
     _, ext = os.path.splitext(file_path)
     ext = ext.lower()
 
+    # Direct extension mapping
     if ext == '.pdf':
         return 'pdf'
     elif ext == '.pptx':
@@ -81,6 +82,7 @@ def detect_file_type(file_path: str) -> str:
     elif ext in ['.txt', '.md', '.py', '.js', '.html', '.css', '.json', '.xml', '.csv']:
         return 'text'
 
+    # MIME type fallback
     mime_type, _ = mimetypes.guess_type(file_path)
     if mime_type:
         if mime_type == 'application/pdf':
@@ -92,6 +94,7 @@ def detect_file_type(file_path: str) -> str:
         elif mime_type.startswith('text/'):
             return 'text'
 
+    # Content-based detection as last resort
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             f.read(1024)
@@ -295,7 +298,7 @@ def upload_to_qdrant(
             return False
 
         vector_size = get_vector_size()
-        print(f"Sample embedding size: {vector_size}")
+        print(f"Using vector size: {vector_size}")
 
         client = QdrantClient(url=qdrant_url)
 
@@ -329,8 +332,7 @@ def upload_to_qdrant(
             if chunk_idx % 5 == 0:
                 print(f"Processing chunk {chunk_idx + 1}/{len(chunks)}")
 
-            # Get embedding for document content
-            embedding = get_text_embedding(chunk, task_type="document")
+            embedding = get_text_embedding(chunk)
             point_id = str(uuid.uuid4())
 
             points.append({
@@ -464,6 +466,7 @@ def get_files_from_collection(
                         "flow_id": metadata.get("flow_id")
                     }
 
+        # Check if files still exist on disk and add file size
         files = []
         for file_path, info in file_info_by_path.items():
             path_obj = Path(file_path)

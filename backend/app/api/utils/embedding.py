@@ -15,64 +15,36 @@ OLLAMA_GENERATE_ENDPOINT = os.getenv("OLLAMA_GENERATE_ENDPOINT")
 OLLAMA_TAGS_ENDPOINT = os.getenv("OLLAMA_TAGS_ENDPOINT")
 
 
-def requires_task_prefix(model_name: str) -> bool:
-    """Check if the embedding model requires task-specific prefixes"""
-    model_lower = model_name.lower()
-
-    prefix_required_patterns = [
-        "nomic-embed-text-v2",
-        "nomic-embed-text-v1.5",
-        "nomic-embed-text-v1"
-    ]
-    return any(pattern in model_lower for pattern in prefix_required_patterns)
-
-
-def add_task_prefix(text: str, model_name: str, task_type: str = "document") -> str:
-    """Add appropriate task prefix for models that require it"""
-    if not requires_task_prefix(model_name):
-        return text
-
-    # Don't add prefix if already present
-    if text.startswith(("search_document:", "search_query:", "classification:", "clustering:")):
-        return text
-
-    # Add appropriate prefix based on task type
-    if task_type == "document":
-        return f"search_document: {text}"
-    elif task_type == "query":
-        return f"search_query: {text}"
-    elif task_type == "classification":
-        return f"classification: {text}"
-    elif task_type == "clustering":
-        return f"clustering: {text}"
-    else:
-        return f"search_document: {text}"
-
-
 @lru_cache(maxsize=5)
 def get_vector_size(model_name: Optional[str] = None) -> int:
+    """
+    Get vector size for embedding model with caching
+    Only embeds sample text once per model
+
+    Args:
+        model_name: Name of the model (defaults to DEFAULT_EMBEDDING_MODEL)
+
+    Returns:
+        Vector size for the model
+    """
     if model_name is None:
         model_name = DEFAULT_EMBEDDING_MODEL
 
     print(f"Getting vector size for model: {model_name}")
 
-    sample_embedding = get_text_embedding(
-        "Sample text for dimension detection",
-        task_type="document"
-    )
+    sample_embedding = get_text_embedding("Sample text for dimension detection")
     vector_size = len(sample_embedding)
 
     print(f"Vector size for model '{model_name}': {vector_size}")
     return vector_size
 
 
-def get_text_embedding(text: str, task_type: str = "document") -> List[float]:
+def get_text_embedding(text: str) -> List[float]:
     """
     Get text embedding using the configured embedding model
 
     Args:
         text: Text to embed
-        task_type: Type of task - "document", "query", "classification", "clustering"
 
     Returns:
         List of float values representing the embedding vector
@@ -83,19 +55,13 @@ def get_text_embedding(text: str, task_type: str = "document") -> List[float]:
     url = f"{OLLAMA_URL}{OLLAMA_EMBEDDINGS_ENDPOINT}"
     model = DEFAULT_EMBEDDING_MODEL
 
-    processed_text = add_task_prefix(text, model, task_type)
-
     payload = {
         "model": model,
-        "prompt": processed_text
+        "prompt": text
     }
 
     try:
         print(f"Requesting embedding from {url} with model: {model}")
-        if processed_text != text:
-            print(
-                f"Added task prefix '{task_type}'. Original length: {len(text)}, processed length: {len(processed_text)}")
-
         response = requests.post(url, json=payload, timeout=30)
         response.raise_for_status()
 
@@ -169,7 +135,6 @@ def get_image_description(image_path: str, prompt: str = None) -> str:
     url = f"{OLLAMA_URL}{OLLAMA_GENERATE_ENDPOINT}"
     model = DEFAULT_VISION_MODEL
 
-    # Default prompt if none provided
     if prompt is None:
         prompt = "Describe this image in detail, including objects, people, text, colors, and setting."
 
@@ -235,7 +200,7 @@ def test_embedding_model() -> Dict[str, Any]:
         test_text = "This is a test sentence for embedding dimension detection."
 
         start_time = time.time()
-        embedding = get_text_embedding(test_text, task_type="document")
+        embedding = get_text_embedding(test_text)
         response_time = time.time() - start_time
 
         return {
@@ -244,9 +209,7 @@ def test_embedding_model() -> Dict[str, Any]:
             "vector_size": len(embedding),
             "response_time_seconds": round(response_time, 3),
             "sample_values": embedding[:5] if len(embedding) >= 5 else embedding,
-            "test_text": test_text,
-            "requires_prefix": requires_task_prefix(model),
-            "processed_text": add_task_prefix(test_text, model, "document")
+            "test_text": test_text
         }
 
     except Exception as e:
@@ -306,6 +269,10 @@ def get_embedding_info() -> Dict[str, Any]:
         "ollama_url": OLLAMA_URL,
         "embedding_endpoint": OLLAMA_EMBEDDINGS_ENDPOINT,
         "vision_endpoint": OLLAMA_GENERATE_ENDPOINT,
-        "supports_task_prefixes": requires_task_prefix(DEFAULT_EMBEDDING_MODEL),
-        "available_task_types": ["document", "query", "classification", "clustering"]
+        "vector_size": get_vector_size()
     }
+
+
+def clear_vector_cache():
+    get_vector_size.cache_clear()
+    print("Vector size cache cleared")
