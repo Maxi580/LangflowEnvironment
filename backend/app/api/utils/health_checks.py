@@ -2,7 +2,7 @@ import os
 import requests
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
-from .qdrant import get_ollama_embedding
+from .embedding import get_vector_size
 
 OLLAMA_URL = os.getenv("INTERNAL_OLLAMA_URL", "http://ollama:11434")
 QDRANT_URL = os.getenv("INTERNAL_QDRANT_URL", "http://qdrant:6333")
@@ -51,10 +51,7 @@ def check_qdrant_connection(url: str = QDRANT_URL, flow_id: str = None) -> bool:
 
             if flow_id and flow_id not in existing_collection_names:
                 try:
-                    sample_embedding = get_ollama_embedding(
-                        "Sample text for collection initialization",
-                    )
-                    vector_size = len(sample_embedding)
+                    vector_size = get_vector_size()
 
                     client = QdrantClient(url=url)
                     client.create_collection(

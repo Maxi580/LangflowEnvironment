@@ -432,7 +432,6 @@ def get_files_from_collection(
     try:
         client = QdrantClient(url=qdrant_url)
 
-        # Check if collection exists
         collections = client.get_collections().collections
         collection_names = [collection.name for collection in collections]
 

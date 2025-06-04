@@ -14,12 +14,11 @@ from ..utils.qdrant import (
     construct_collection_name,
     verify_user_flow_access
 )
-from ..utils.embedding_helper import test_embedding_model
-from ..utils.connection import check_qdrant_connection
+from ..utils.embedding import test_embedding_model
+from ..utils.health_checks import check_qdrant_connection
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 
-# Environment variables
 QDRANT_URL = os.getenv("QDRANT_INTERNAL_URL")
 COLLECTIONS_BASE_ENDPOINT = os.getenv("COLLECTIONS_BASE_ENDPOINT")
 BACKEND_UPLOAD_DIR = os.getenv("BACKEND_UPLOAD_DIR")
