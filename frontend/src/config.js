@@ -27,8 +27,23 @@ const COLLECTIONS_BASE_ENDPOINT = process.env.REACT_APP_COLLECTIONS_BASE_ENDPOIN
 const COLLECTIONS_FILES_ENDPOINT = process.env.REACT_APP_COLLECTIONS_FILES_ENDPOINT || '/files';
 const COLLECTIONS_UPLOAD_ENDPOINT = process.env.REACT_APP_COLLECTIONS_UPLOAD_ENDPOINT || '/files/upload';
 
+const ACCESS_COOKIE_NAME = process.env.REACT_APP_ACCESS_COOKIE_NAME || 'dashboard_access_token';
+const REFRESH_COOKIE_NAME = process.env.REACT_APP_REFRESH_COOKIE_NAME || 'dashboard_refresh_token';
+const USERNAME_COOKIE_NAME = process.env.REACT_APP_USERNAME_COOKIE_NAME || 'dashboard_username';
+
+
 const config = {
- api: {
+  cookies: {
+    accessToken: ACCESS_COOKIE_NAME,
+    refreshToken: REFRESH_COOKIE_NAME,
+    username: USERNAME_COOKIE_NAME,
+  },
+
+  routes: {
+   login: USERS_LOGIN_ENDPOINT,
+  },
+
+  api: {
    langflowUrl: LANGFLOW_API,
    backendUrl: BACKEND_API,
 
@@ -79,7 +94,7 @@ const config = {
    getCollectionFilesUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}/${flowId}${COLLECTIONS_FILES_ENDPOINT}`,
    getCollectionUploadUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}/${flowId}${COLLECTIONS_UPLOAD_ENDPOINT}`,
    getCollectionFileDeleteUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}/${flowId}${COLLECTIONS_FILES_ENDPOINT}`,
- },
+  },
 
  version: APP_VERSION,
 };

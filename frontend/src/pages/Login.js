@@ -177,7 +177,6 @@ const LoginPage = ({ onLoginSuccess }) => {
     }
   }, [username, password]);
 
-  // Handle Enter key press
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !isLoading && username && password) {
       handleLogin();

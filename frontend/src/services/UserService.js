@@ -3,10 +3,6 @@ import CookieHelper from '../utils/CookieHelper';
 import TokenRefreshService from "./TokenRefreshService";
 
 class UserService {
-  constructor() {
-    this.currentUser = null;
-  }
-
   /**
    * Login user with secure backend endpoint
    * @param {Object} credentials - Username and password
@@ -40,20 +36,12 @@ class UserService {
         throw new Error(responseData.message || 'Login failed');
       }
 
-      this.currentUser = {
-        username: responseData.user.username,
-        userId: responseData.user.userId,
-        tokenExpiry: responseData.user.tokenExpiry,
-        isAuthenticated: true
-      };
-
       return {
         success: true,
-        user: this.currentUser
+        message: responseData.message || 'Login successful'
       };
 
     } catch (error) {
-      this.currentUser = null;
       throw new Error(`Login failed: ${error.message}`);
     }
   }
@@ -170,8 +158,6 @@ class UserService {
 
       const result = await response.json().catch(() => ({ success: true }));
 
-      this.currentUser = null;
-
       return {
         success: true,
         message: result.message || 'Logged out successfully',
@@ -180,8 +166,6 @@ class UserService {
 
     } catch (error) {
       console.warn('Backend logout failed:', error);
-
-      this.currentUser = null;
 
       const clearedCookies = CookieHelper.clearAllCookies();
 
@@ -194,16 +178,7 @@ class UserService {
   }
 
   /**
-   * Get current user information
-   * @returns {Object|null} - User data or null
-   */
-  getCurrentUser() {
-    return this.currentUser;
-  }
-
-  /**
    * Check if user is authenticated via backend verification
-   * Also fetches and stores user data for page refreshes
    * @returns {Promise<boolean>} - Authentication status
    */
   async isAuthenticated() {
@@ -213,29 +188,54 @@ class UserService {
       });
 
       if (!response.ok) {
-        this.currentUser = null;
         return false;
+      }
+
+      const result = await response.json();
+      return result.authenticated === true;
+
+    } catch (error) {
+      console.warn('Auth check failed:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get current user information from cookies and backend
+   * @returns {Promise<Object|null>} - User data or null
+   */
+  async getCurrentUserInfo() {
+    try {
+      const username = CookieHelper.getUsername();
+
+      if (!username) {
+        return null;
+      }
+
+      const response = await fetch(config.api.getUsersVerifyAuthUrl(), {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        return null;
       }
 
       const result = await response.json();
 
       if (result.authenticated && result.user) {
-        this.currentUser = {
-          username: result.user.username,
+        return {
+          username: username,
           userId: result.user.userId,
           tokenExpiry: result.user.tokenExpiry,
           isAuthenticated: true
         };
-        return true;
-      } else {
-        this.currentUser = null;
-        return false;
       }
 
+      return null;
+
     } catch (error) {
-      console.warn('Auth check failed:', error);
-      this.currentUser = null;
-      return false;
+      console.warn('Get user info failed:', error);
+      return null;
     }
   }
 

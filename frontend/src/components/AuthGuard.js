@@ -21,13 +21,11 @@ const AuthGuard = ({ children }) => {
     try {
       setAuthState(prev => ({ ...prev, isLoading: true }));
 
-      // Simple auth check - this returns a boolean
       const isAuth = await userService.isAuthenticated();
 
       let user = null;
       if (isAuth) {
-        // Get user info from local cookies if authenticated
-        user = userService.getCurrentUser();
+        user = userService.getCurrentUserInfo();
       }
 
       setAuthState({
