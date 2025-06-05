@@ -5,7 +5,10 @@ from functools import lru_cache
 import tempfile
 import fitz
 import zipfile
-
+from docx import Document
+from docx.shared import Inches
+import io
+from PIL import Image
 import PyPDF2
 import mimetypes
 from pptx import Presentation
@@ -447,6 +450,40 @@ def extract_images_from_pdf(file_path: str) -> List[Tuple[bytes, str]]:
     return images
 
 
+def extract_images_from_docx(file_path: str) -> List[Tuple[bytes, str]]:
+    """
+    Extract images from Word document (.docx)
+
+    Returns:
+        List of (image_bytes, description) tuples
+    """
+    images = []
+
+    try:
+        # Word documents are also zip archives
+        with zipfile.ZipFile(file_path, 'r') as zip_file:
+            # Look for image files in the media directory
+            for file_info in zip_file.filelist:
+                if file_info.filename.startswith('word/media/'):
+                    # Check if it's an image file
+                    if any(file_info.filename.lower().endswith(ext) for ext in
+                           ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.emf', '.wmf']):
+                        try:
+                            img_data = zip_file.read(file_info.filename)
+                            # Skip EMF and WMF files as they're harder to process
+                            if not file_info.filename.lower().endswith(('.emf', '.wmf')):
+                                description = get_ollama_image_description_from_bytes(img_data)
+                                images.append((img_data, f"[Word embedded image]: {description}"))
+                        except Exception as e:
+                            print(f"Error processing Word image {file_info.filename}: {e}")
+                            continue
+
+    except Exception as e:
+        print(f"Error extracting images from Word document {file_path}: {e}")
+
+    return images
+
+
 def extract_images_from_pptx(file_path: str) -> List[Tuple[bytes, str]]:
     """
     Extract images from PowerPoint presentation
@@ -524,6 +561,8 @@ def detect_file_type(file_path: str) -> str:
         return 'pptx'
     elif ext == '.xlsx':
         return 'xlsx'
+    elif ext == '.docx':
+        return 'docx'
     if ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']:
         return 'image'
     elif ext in ['.txt', '.md', '.py', '.js', '.html', '.css', '.json', '.xml', '.csv']:
@@ -537,6 +576,8 @@ def detect_file_type(file_path: str) -> str:
             return 'pptx'
         elif mime_type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
             return 'xlsx'
+        elif mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+            return 'docx'
         elif mime_type.startswith('text/'):
             return 'text'
 
@@ -576,6 +617,54 @@ def extract_pdf(file_path: str, include_images: bool = True) -> str:
     except Exception as e:
         print(f"Error extracting text from PDF {file_path}: {e}")
         raise
+
+
+def extract_docx(file_path: str, include_images: bool = True) -> str:
+    """
+    Extract text from Word (.docx) files using python-docx, optionally including image descriptions
+    """
+    try:
+        text_content = []
+        doc = Document(file_path)
+
+        # Extract text from paragraphs
+        for paragraph in doc.paragraphs:
+            if paragraph.text.strip():
+                text_content.append(paragraph.text.strip())
+
+        # Extract text from tables
+        for table in doc.tables:
+            table_text = ["=== TABLE ==="]
+            for row in table.rows:
+                row_data = []
+                for cell in row.cells:
+                    if cell.text.strip():
+                        row_data.append(cell.text.strip())
+                if row_data:
+                    table_text.append(" | ".join(row_data))
+
+            if len(table_text) > 1:  # More than just the header
+                text_content.extend(table_text)
+                text_content.append("")  # Add blank line after table
+
+        result = "\n".join(text_content)
+
+        # Add image descriptions if requested
+        if include_images:
+            images = extract_images_from_docx(file_path)
+            if images:
+                result += "\n\n=== EMBEDDED IMAGES ===\n\n"
+                for i, (img_data, description) in enumerate(images, 1):
+                    result += f"Image {i}: {description}\n\n"
+
+        if not result.strip():
+            return "No text content found in Word document."
+
+        return result
+
+    except Exception as e:
+        print(f"Error extracting text from Word document {file_path}: {e}")
+        raise ValueError(f"Failed to extract text from Word document: {str(e)}")
 
 
 def extract_xlsx(file_path: str, include_images: bool = True) -> str:
@@ -734,6 +823,8 @@ def read_file_content(file_path: str, include_images: bool = True) -> Tuple[str,
     elif file_type == 'xlsx':
         content = extract_xlsx(file_path, include_images)
         return content, 'xlsx'
+    elif file_type == 'docx':
+        content = extract_docx(file_path, include_images)
     elif file_type == 'image':
         description = get_image_description(file_path)
         return description, 'image'
