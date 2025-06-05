@@ -19,11 +19,11 @@ async def redirect_to_langflow(
     access_token, refresh_token = get_user_tokens(request)
 
     if not access_token or not refresh_token:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url=f"{LANGFLOW_URL}/", status_code=302)
 
     access_token_max_age = get_token_max_age(access_token)
     if access_token_max_age < 60:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url=f"{LANGFLOW_URL}/", status_code=302)
 
     target_url = f"{LANGFLOW_URL}/"
 
