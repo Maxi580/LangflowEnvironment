@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 from ..routes.flows import get_flows
-from .embedding import get_text_embedding, get_vector_size
+from .embedding import get_text_embedding, get_vector_size, read_file_content
 
 OLLAMA_URL = os.getenv("OLLAMA_INTERNAL_URL")
 QDRANT_URL = os.getenv("QDRANT_INTERNAL_URL")
