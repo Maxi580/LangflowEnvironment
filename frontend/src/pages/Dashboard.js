@@ -7,46 +7,60 @@ import FlowManagement from '../components/FlowManagement';
 import DeleteConfirmation from '../components/DeleteConfirmation';
 import ChatManagement from "../components/ChatManagement";
 import FileManagement from "../components/FileManagement";
+import config from '../config';
+import CookieHelper from "../utils/CookieHelper";
 
-const Dashboard = ({ user }) => {
+const Dashboard = ({ user }) => { // 🔧 Get user from AuthGuard
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedFlow, setSelectedFlow] = useState(null);
-
-  // Add these missing state variables
   const [messages, setMessages] = useState([]);
   const [files, setFiles] = useState([]);
-
   const navigate = useNavigate();
+
+  const username = CookieHelper.getUsername() || 'User';
 
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
       await userService.logout();
-      navigate('/login', { replace: true });
+      navigate(config.routes.login, { replace: true });
     } catch (error) {
-      navigate('/login', { replace: true });
+      navigate(config.routes.login, { replace: true });
     } finally {
       setIsLoggingOut(false);
     }
   };
 
   const handleDeleteUser = async () => {
-    if (!user?.userId) {
+    let userId = user?.userId;
+
+    if (!userId) {
+      try {
+        const info = await userService.getCurrentUserInfo();
+        userId = info?.userId;
+      } catch (error) {
+        console.error('Could not get user ID for deletion:', error);
+        return;
+      }
+    }
+
+    if (!userId) {
+      console.error('No user ID available for deletion');
       return;
     }
 
     try {
       setIsDeleting(true);
-      const result = await userService.deleteUser(user.userId);
+      const result = await userService.deleteUser(userId);
 
       if (result.success) {
         await userService.logout();
-        navigate('/login', { replace: true });
-      } else {
+        navigate(config.routes.login, { replace: true });
       }
     } catch (error) {
+      console.error('Delete user error:', error);
     } finally {
       setIsDeleting(false);
       setShowDeleteModal(false);
@@ -55,25 +69,20 @@ const Dashboard = ({ user }) => {
 
   const handleFlowSelect = async (flow) => {
     setSelectedFlow(flow);
-    // Clear messages when switching flows
     setMessages([]);
 
-    // If a flow is selected, ensure collection exists
     if (flow) {
       try {
-        // Create collection if it doesn't exist (this is safe - won't recreate if exists)
         await fileService.createCollection(flow.id);
         console.log(`Collection ready for flow: ${flow.id}`);
       } catch (error) {
         console.error('Error creating collection:', error);
-        // Don't block the flow selection, just log the error
       }
     }
   };
 
   return (
     <div className="h-screen bg-slate-900 flex flex-col overflow-hidden">
-      {/* Header - same as before */}
       <header className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
@@ -92,11 +101,10 @@ const Dashboard = ({ user }) => {
 
           <div className="flex flex-col items-center">
             <h1 className="text-xl font-bold text-white">Agenten Dashboard</h1>
-            {user && (
-              <span className="text-slate-300 text-sm mt-1">
-                Welcome, {user.username}
-              </span>
-            )}
+            {/* 🔧 Use username from user prop */}
+            <span className="text-slate-300 text-sm mt-1">
+              Welcome, {username || 'User'}
+            </span>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -124,10 +132,8 @@ const Dashboard = ({ user }) => {
         </div>
       </header>
 
-      {/* Main Dashboard Content - uses remaining space */}
       <main className="flex-1 flex flex-col overflow-hidden">
         <div className="container mx-auto px-4 py-6 flex flex-col h-full">
-          {/* Flow Management Section - fixed height */}
           <div className="flex-shrink-0 mb-6">
             <FlowManagement
               onFlowSelect={handleFlowSelect}
@@ -135,9 +141,7 @@ const Dashboard = ({ user }) => {
             />
           </div>
 
-          {/* Chat and File Management Section - takes remaining space and matches flow width */}
           <div className="flex-1 flex gap-4 min-h-0">
-            {/* Chat Management - takes remaining space after file management */}
             <div className="flex-1">
               <ChatManagement
                 selectedFlow={selectedFlow}
@@ -147,7 +151,6 @@ const Dashboard = ({ user }) => {
               />
             </div>
 
-            {/* File Management - fixed width to match flow management alignment */}
             <div className="w-80 flex-shrink-0">
               <FileManagement
                 flowId={selectedFlow?.id}
@@ -163,7 +166,7 @@ const Dashboard = ({ user }) => {
         onClose={() => setShowDeleteModal(false)}
         onConfirm={handleDeleteUser}
         isLoading={isDeleting}
-        username={user?.username}
+        username={user?.username || 'User'}
       />
     </div>
   );

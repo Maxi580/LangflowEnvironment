@@ -22,8 +22,10 @@ USERS_REFRESH_TOKEN_ENDPOINT = os.getenv("USERS_REFRESH_TOKEN_ENDPOINT")
 USERS_LOGOUT_ENDPOINT = os.getenv("USERS_LOGOUT_ENDPOINT")
 USERS_VERIFY_AUTH_ENDPOINT = os.getenv("USERS_VERIFY_AUTH_ENDPOINT")
 USERS_AUTH_STATUS_ENDPOINT = os.getenv("USERS_AUTH_STATUS_ENDPOINT")
-ACCESS_TOKEN_COOKIE = "dashboard_access_token"
-REFRESH_TOKEN_COOKIE = "dashboard_refresh_token"
+ACCESS_COOKIE_NAME = os.getenv("ACCESS_COOKIE_NAME")
+REFRESH_COOKIE_NAME = os.getenv("REFRESH_COOKIE_NAME")
+USERNAME_COOKIE_NAME = os.getenv("USERNAME_COOKIE_NAME")
+
 
 router = APIRouter(prefix=USERS_BASE_ENDPOINT, tags=["users"])
 
@@ -221,9 +223,18 @@ async def login(
             except Exception as e:
                 print(f"Error decoding refresh token, using default expiry: {e}")
 
-        # ✅ Use constants for cookie names
         response.set_cookie(
-            key=ACCESS_TOKEN_COOKIE,
+            key=USERNAME_COOKIE_NAME,
+            value=user.username,
+            httponly=False,
+            secure=request.url.scheme == "https",
+            samesite="strict",
+            max_age=access_token_max_age,
+            path="/"
+        )
+
+        response.set_cookie(
+            key=ACCESS_COOKIE_NAME,
             value=access_token,
             httponly=True,
             secure=request.url.scheme == "https",
@@ -234,7 +245,7 @@ async def login(
 
         if refresh_token:
             response.set_cookie(
-                key=REFRESH_TOKEN_COOKIE,
+                key=REFRESH_COOKIE_NAME,
                 value=refresh_token,
                 httponly=True,
                 secure=request.url.scheme == "https",
@@ -245,7 +256,7 @@ async def login(
 
         return {
             "success": True,
-            "message": "Login successful - secure cookies set",
+            "message": "Login successful",
             "user": {
                 "username": user.username,
                 "userId": user_id,
@@ -275,8 +286,7 @@ async def refresh_token(request: Request, response: Response) -> Dict[str, Any]:
     Frontend calls this when getting 401 errors
     """
     try:
-        # ✅ Use constants for cookie names
-        refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)
+        refresh_token = request.cookies.get(REFRESH_COOKIE_NAME)
 
         if not refresh_token:
             return {
@@ -346,9 +356,8 @@ async def refresh_token(request: Request, response: Response) -> Dict[str, Any]:
             except Exception as e:
                 print(f"Error decoding new refresh token, using default expiry: {e}")
 
-        # ✅ Use constants for cookie names
         response.set_cookie(
-            key=ACCESS_TOKEN_COOKIE,
+            key=ACCESS_COOKIE_NAME,
             value=new_access_token,
             httponly=True,
             secure=request.url.scheme == "https",
@@ -359,7 +368,7 @@ async def refresh_token(request: Request, response: Response) -> Dict[str, Any]:
 
         if new_refresh_token:
             response.set_cookie(
-                key=REFRESH_TOKEN_COOKIE,
+                key=REFRESH_COOKIE_NAME,
                 value=new_refresh_token,
                 httponly=True,
                 secure=request.url.scheme == "https",
@@ -399,12 +408,10 @@ async def logout(request: Request, response: Response) -> Dict[str, Any]:
     Logout user by calling Langflow logout endpoint and deleting ALL cookies
     """
     try:
-        # ✅ Use constants for cookie names
-        access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
+        access_token = request.cookies.get(ACCESS_COOKIE_NAME)
 
         langflow_logout_success = False
 
-        # Call Langflow logout endpoint first
         if access_token:
             try:
                 logout_url = f"{LANGFLOW_URL}{LF_AUTH_LOGOUT_ENDPOINT}"
@@ -459,8 +466,8 @@ async def logout(request: Request, response: Response) -> Dict[str, Any]:
 @router.get(USERS_VERIFY_AUTH_ENDPOINT)
 async def verify_auth(request: Request) -> Dict[str, Any]:
     try:
-        # ✅ Use constants for cookie names
-        access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
+        access_token = request.cookies.get(ACCESS_COOKIE_NAME)
+        username = request.cookies.get(USERNAME_COOKIE_NAME)
 
         if not access_token:
             return {
@@ -469,8 +476,8 @@ async def verify_auth(request: Request) -> Dict[str, Any]:
             }
 
         try:
-            user_info = jwt.decode(access_token, options={"verify_signature": False})
-            token_expiry = user_info.get("exp", 0)
+            jwt_info = jwt.decode(access_token, options={"verify_signature": False})
+            token_expiry = jwt_info.get("exp", 0)
             current_time = int(time.time())
 
             if token_expiry <= current_time:
@@ -479,9 +486,7 @@ async def verify_auth(request: Request) -> Dict[str, Any]:
                     "message": "Access token expired"
                 }
 
-            # ✅ Get username from JWT token
-            username = user_info.get("username") or user_info.get("preferred_username") or user_info.get("name")
-            user_id = user_info.get("sub") or user_info.get("user_id")
+            user_id = jwt_info.get("sub") or jwt_info.get("user_id")
 
             return {
                 "authenticated": True,
@@ -511,9 +516,8 @@ async def verify_auth(request: Request) -> Dict[str, Any]:
 @router.get(USERS_AUTH_STATUS_ENDPOINT)
 async def get_auth_status(request: Request) -> Dict[str, Any]:
     try:
-        # ✅ Use constants for cookie names - this endpoint can stay as-is since it's not used
-        access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
-        refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)
+        access_token = request.cookies.get(ACCESS_COOKIE_NAME)
+        refresh_token = request.cookies.get(REFRESH_COOKIE_NAME)
 
         if not access_token:
             return {
@@ -527,8 +531,8 @@ async def get_auth_status(request: Request) -> Dict[str, Any]:
             }
 
         try:
-            user_info = jwt.decode(access_token, options={"verify_signature": False})
-            access_token_expiry = user_info.get("exp", 0)
+            jwt_info = jwt.decode(access_token, options={"verify_signature": False})
+            access_token_expiry = jwt_info.get("exp", 0)
             current_time = int(time.time())
 
             access_token_valid = access_token_expiry > current_time
@@ -545,15 +549,9 @@ async def get_auth_status(request: Request) -> Dict[str, Any]:
 
             is_authenticated = access_token_valid or refresh_token_valid
 
-            # ✅ Get username from JWT token instead of cookies
-            username = user_info.get("username") or user_info.get("preferred_username") or user_info.get("name")
-            user_id = user_info.get("sub") or user_info.get("user_id")
-
             return {
                 "authenticated": is_authenticated,
                 "user": {
-                    "username": username,
-                    "userId": user_id,
                     "tokenExpiry": access_token_expiry
                 } if is_authenticated else None,
                 "tokens": {
