@@ -406,7 +406,6 @@ async def delete_file_from_collection(
                 detail="Failed to delete file from Qdrant collection"
             )
 
-        # Try to delete physical file as well
         file_path_obj = Path(file_path)
         physical_file_deleted = False
         if file_path_obj.exists():

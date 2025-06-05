@@ -1,32 +1,44 @@
 import os
+import time
+import tempfile
 import uuid
 from pathlib import Path
 from fastapi import Request
-from typing import List, Dict, Any, Optional, Tuple
+import base64
+import zipfile
+import io
+from PIL import Image
 
+import requests
+import uuid
+from typing import List, Dict, Any, Optional, Tuple
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 import PyPDF2
 import mimetypes
 from pptx import Presentation
 from openpyxl import load_workbook
-
+import fitz
 from ..routes.flows import get_flows
 from .embedding import get_text_embedding, get_image_description, get_vector_size
 
-
+OLLAMA_URL = os.getenv("OLLAMA_INTERNAL_URL")
 QDRANT_URL = os.getenv("QDRANT_INTERNAL_URL")
+DEFAULT_EMBEDDING_MODEL = os.getenv("DEFAULT_EMBEDDING_MODEL")
+DEFAULT_VISION_MODEL = os.getenv("DEFAULT_VISION_MODEL")
 DEFAULT_CHUNK_SIZE = int(os.getenv("CHUNK_SIZE"))
 DEFAULT_CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP"))
 
+OLLAMA_TAGS_ENDPOINT = os.getenv("OLLAMA_TAGS_ENDPOINT", "/api/tags")
+OLLAMA_EMBEDDINGS_ENDPOINT = os.getenv("OLLAMA_EMBEDDINGS_ENDPOINT", "/api/embeddings")
+OLLAMA_GENERATE_ENDPOINT = os.getenv("OLLAMA_GENERATE_ENDPOINT", "/api/generate")
+
 
 def construct_collection_name(flow_id: str):
-    """Construct collection name from flow ID"""
     return flow_id
 
 
 async def verify_user_flow_access(request: Request, flow_id: str) -> bool:
-    """Verify user has access to the specified flow"""
     try:
         print(f"Checking user access to flow: {flow_id}")
         flows = await get_flows(request, remove_example_flows=True, header_flows=False, get_all=True)
@@ -38,51 +50,238 @@ async def verify_user_flow_access(request: Request, flow_id: str) -> bool:
         return False
 
 
-def is_file_in_qdrant(file_path: str, collection_name: str, qdrant_url: str = QDRANT_URL) -> bool:
-    """Check if a file already exists in the Qdrant collection"""
+def get_available_models() -> Dict[str, List[str]]:
+    """Get all available models from Ollama and categorize them"""
     try:
-        client = QdrantClient(url=qdrant_url)
-        response = client.scroll(
-            collection_name=collection_name,
-            scroll_filter={
-                "must": [
-                    {
-                        "key": "metadata.file_path",
-                        "match": {
-                            "value": file_path
-                        }
-                    }
-                ]
-            },
-            limit=1
-        )
-        return len(response[0]) > 0
+        url = f"{OLLAMA_URL}{OLLAMA_TAGS_ENDPOINT}"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
+        models = [model["name"] for model in data.get("models", [])]
+
+        embedding_models = []
+        vision_models = []
+        chat_models = []
+
+        for model in models:
+            model_lower = model.lower()
+            if "embed" in model_lower:
+                embedding_models.append(model)
+            elif any(vision_name in model_lower for vision_name in ["llava", "bakllava", "moondream"]):
+                vision_models.append(model)
+            else:
+                chat_models.append(model)
+
+        return {
+            "embedding": embedding_models,
+            "vision": vision_models,
+            "chat": chat_models,
+            "all": models
+        }
+
     except Exception as e:
-        print(f"Error checking if file exists in Qdrant: {e}")
-        return False
+        print(f"Error getting available models: {e}")
+        return {
+            "embedding": [],
+            "vision": [],
+            "chat": [],
+            "all": []
+        }
+
+
+def get_best_embedding_model() -> str:
+    configured_model = os.getenv("DEFAULT_EMBEDDING_MODEL", "nomic-embed-text")
+
+    available = get_available_models()
+    if configured_model in available["all"]:
+        return configured_model
+
+    if available["embedding"]:
+        return available["embedding"][0]
+
+    return "nomic-embed-text"
+
+
+def get_best_vision_model() -> str:
+    configured_model = os.getenv("DEFAULT_VISION_MODEL", "llava:7b")
+
+    available = get_available_models()
+    if configured_model in available["all"]:
+        return configured_model
+
+    if available["vision"]:
+        return available["vision"][0]
+
+    return "llava:7b"
+
+
+def get_ollama_image_description_from_bytes(image_data: bytes, prompt: str = None) -> str:
+    """
+    Get image description from image bytes using your existing vision model helper
+    This is a wrapper around your existing get_image_description function
+
+    Args:
+        image_data: Raw image bytes
+        prompt: Custom prompt for description (optional)
+
+    Returns:
+        String description of the image
+    """
+    try:
+        # Create a temporary file to use with your existing get_image_description function
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_file:
+            temp_file.write(image_data)
+            temp_file_path = temp_file.name
+
+        try:
+            # Use your existing get_image_description function
+            if prompt is None:
+                prompt = ("Describe this image in detail, including objects, people, text, colors, and setting. "
+                          "Focus on any text content, charts, diagrams, or important visual elements.")
+
+            description = get_image_description(temp_file_path, prompt)
+            return description
+
+        finally:
+            # Clean up the temporary file
+            os.unlink(temp_file_path)
+
+    except Exception as e:
+        print(f"Error getting image description: {e}")
+        return "Failed to describe this image."
+
+
+def extract_images_from_pdf(file_path: str) -> List[Tuple[bytes, str]]:
+    """
+    Extract images from PDF using PyMuPDF
+
+    Returns:
+        List of (image_bytes, description) tuples
+    """
+    images = []
+
+    try:
+        doc = fitz.open(file_path)
+
+        for page_num in range(len(doc)):
+            page = doc.load_page(page_num)
+            image_list = page.get_images()
+
+            for img_index, img in enumerate(image_list):
+                try:
+                    xref = img[0]
+                    pix = fitz.Pixmap(doc, xref)
+
+                    # Convert to RGB if CMYK
+                    if pix.n - pix.alpha < 4:
+                        img_data = pix.tobytes("png")
+                        description = get_ollama_image_description_from_bytes(img_data)
+                        images.append((img_data, f"[Image from page {page_num + 1}]: {description}"))
+                    else:
+                        # Convert CMYK to RGB
+                        pix1 = fitz.Pixmap(fitz.csRGB, pix)
+                        img_data = pix1.tobytes("png")
+                        description = get_ollama_image_description_from_bytes(img_data)
+                        images.append((img_data, f"[Image from page {page_num + 1}]: {description}"))
+                        pix1 = None
+
+                    pix = None
+
+                except Exception as e:
+                    print(f"Error extracting image {img_index} from page {page_num}: {e}")
+                    continue
+
+        doc.close()
+
+    except Exception as e:
+        print(f"Error extracting images from PDF {file_path}: {e}")
+
+    return images
+
+
+def extract_images_from_pptx(file_path: str) -> List[Tuple[bytes, str]]:
+    """
+    Extract images from PowerPoint presentation
+
+    Returns:
+        List of (image_bytes, description) tuples
+    """
+    images = []
+
+    try:
+        presentation = Presentation(file_path)
+
+        for slide_num, slide in enumerate(presentation.slides, 1):
+            for shape in slide.shapes:
+                try:
+                    # Check if shape has an image
+                    if hasattr(shape, "image") and shape.image:
+                        img_data = shape.image.blob
+                        description = get_ollama_image_description_from_bytes(img_data)
+                        images.append((img_data, f"[Image from slide {slide_num}]: {description}"))
+
+                except Exception as e:
+                    print(f"Error extracting image from slide {slide_num}: {e}")
+                    continue
+
+    except Exception as e:
+        print(f"Error extracting images from PowerPoint {file_path}: {e}")
+
+    return images
+
+
+def extract_images_from_xlsx(file_path: str) -> List[Tuple[bytes, str]]:
+    """
+    Extract images from Excel workbook
+
+    Returns:
+        List of (image_bytes, description) tuples
+    """
+    images = []
+
+    try:
+        # Excel files are zip archives, we can extract images directly
+        with zipfile.ZipFile(file_path, 'r') as zip_file:
+            # Look for image files in the media directory
+            for file_info in zip_file.filelist:
+                if file_info.filename.startswith('xl/media/'):
+                    # Check if it's an image file
+                    if any(file_info.filename.lower().endswith(ext) for ext in
+                           ['.png', '.jpg', '.jpeg', '.gif', '.bmp']):
+                        try:
+                            img_data = zip_file.read(file_info.filename)
+                            description = get_ollama_image_description_from_bytes(img_data)
+                            images.append((img_data, f"[Excel embedded image]: {description}"))
+                        except Exception as e:
+                            print(f"Error processing Excel image {file_info.filename}: {e}")
+                            continue
+
+    except Exception as e:
+        print(f"Error extracting images from Excel {file_path}: {e}")
+
+    return images
 
 
 def detect_file_type(file_path: str) -> str:
     """
     Detect file type based on extension and MIME type
-    Supports PDF, PowerPoint, Excel, images, and text files
+    Now supports PDF, PowerPoint, Excel, and text files
     """
     _, ext = os.path.splitext(file_path)
     ext = ext.lower()
 
-    # Direct extension mapping
     if ext == '.pdf':
         return 'pdf'
     elif ext == '.pptx':
         return 'pptx'
     elif ext == '.xlsx':
         return 'xlsx'
-    elif ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']:
+    if ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']:
         return 'image'
     elif ext in ['.txt', '.md', '.py', '.js', '.html', '.css', '.json', '.xml', '.csv']:
         return 'text'
 
-    # MIME type fallback
     mime_type, _ = mimetypes.guess_type(file_path)
     if mime_type:
         if mime_type == 'application/pdf':
@@ -94,7 +293,6 @@ def detect_file_type(file_path: str) -> str:
         elif mime_type.startswith('text/'):
             return 'text'
 
-    # Content-based detection as last resort
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             f.read(1024)
@@ -110,8 +308,8 @@ def detect_file_type(file_path: str) -> str:
     return 'unknown'
 
 
-def extract_text_from_pdf(file_path: str) -> str:
-    """Extract text from PDF files using PyPDF2"""
+def extract_pdf(file_path: str, include_images: bool = True) -> str:
+    """Extract text from PDF files using PyPDF2, optionally including image descriptions"""
     try:
         text = ""
         with open(file_path, "rb") as f:
@@ -119,16 +317,23 @@ def extract_text_from_pdf(file_path: str) -> str:
             for page_num in range(len(pdf_reader.pages)):
                 page = pdf_reader.pages[page_num]
                 text += page.extract_text() + "\n\n"
+
+        if include_images:
+            images = extract_images_from_pdf(file_path)
+            if images:
+                text += "\n\n=== EMBEDDED IMAGES ===\n\n"
+                for i, (img_data, description) in enumerate(images, 1):
+                    text += f"Image {i}: {description}\n\n"
+
         return text
     except Exception as e:
         print(f"Error extracting text from PDF {file_path}: {e}")
         raise
 
 
-def extract_text_from_xlsx(file_path: str) -> str:
+def extract_xlsx(file_path: str, include_images: bool = True) -> str:
     """
-    Extract text from Excel (.xlsx) files using openpyxl
-    Extracts data from all worksheets, preserving table structure
+    Extract text from Excel (.xlsx) files using openpyxl, optionally including image descriptions
     """
     try:
         text_content = []
@@ -141,21 +346,18 @@ def extract_text_from_xlsx(file_path: str) -> str:
             max_row = worksheet.max_row
             max_col = worksheet.max_column
 
-            # Find first non-empty row
             first_row = 1
             for row in range(1, max_row + 1):
                 if any(worksheet.cell(row, col).value is not None for col in range(1, max_col + 1)):
                     first_row = row
                     break
 
-            # Find last non-empty row
             last_row = max_row
             for row in range(max_row, 0, -1):
                 if any(worksheet.cell(row, col).value is not None for col in range(1, max_col + 1)):
                     last_row = row
                     break
 
-            # Extract table data
             table_data = []
             for row in range(first_row, last_row + 1):
                 row_data = []
@@ -168,7 +370,6 @@ def extract_text_from_xlsx(file_path: str) -> str:
                         row_data.append("")
 
                 if any(cell.strip() for cell in row_data):
-                    # Remove trailing empty cells
                     while row_data and not row_data[-1].strip():
                         row_data.pop()
 
@@ -187,6 +388,14 @@ def extract_text_from_xlsx(file_path: str) -> str:
         workbook.close()
 
         result = "\n".join(text_content)
+
+        if include_images:
+            images = extract_images_from_xlsx(file_path)
+            if images:
+                result += "\n\n=== EMBEDDED IMAGES ===\n\n"
+                for i, (img_data, description) in enumerate(images, 1):
+                    result += f"Image {i}: {description}\n\n"
+
         if not result.strip():
             return "No data found in Excel file."
 
@@ -197,10 +406,9 @@ def extract_text_from_xlsx(file_path: str) -> str:
         raise ValueError(f"Failed to extract text from Excel file: {str(e)}")
 
 
-def extract_text_from_pptx(file_path: str) -> str:
+def extract_pptx(file_path: str, include_images: bool = True) -> str:
     """
-    Extract text from PowerPoint (.pptx) files using python-pptx
-    Extracts text from slides, text boxes, shapes, and tables
+    Extract text from PowerPoint (.pptx) files using python-pptx, optionally including image descriptions
     """
     try:
         text_content = []
@@ -234,6 +442,15 @@ def extract_text_from_pptx(file_path: str) -> str:
                 text_content.append("")  # Add blank line between slides
 
         result = "\n".join(text_content)
+
+        # Add image descriptions if requested
+        if include_images:
+            images = extract_images_from_pptx(file_path)
+            if images:
+                result += "\n\n=== EMBEDDED IMAGES ===\n\n"
+                for i, (img_data, description) in enumerate(images, 1):
+                    result += f"Image {i}: {description}\n\n"
+
         if not result.strip():
             return "No text content found in PowerPoint presentation."
 
@@ -244,10 +461,16 @@ def extract_text_from_pptx(file_path: str) -> str:
         raise ValueError(f"Failed to extract text from PowerPoint file: {str(e)}")
 
 
-def read_file_content(file_path: str) -> Tuple[str, str]:
+def read_file_content(file_path: str, include_images: bool = True) -> Tuple[str, str]:
     """
-    Read and extract content from supported file types
-    Returns: (content, file_type)
+    Read and extract content from supported file types, optionally including image descriptions
+
+    Args:
+        file_path: Path to the file
+        include_images: Whether to extract and describe embedded images
+
+    Returns:
+        (content, file_type)
     """
     file_type = detect_file_type(file_path)
 
@@ -256,19 +479,71 @@ def read_file_content(file_path: str) -> Tuple[str, str]:
             content = f.read()
         return content, 'text'
     elif file_type == 'pdf':
-        content = extract_text_from_pdf(file_path)
+        content = extract_pdf(file_path, include_images)
         return content, 'pdf'
     elif file_type == 'pptx':
-        content = extract_text_from_pptx(file_path)
+        content = extract_pptx(file_path, include_images)
         return content, 'pptx'
     elif file_type == 'xlsx':
-        content = extract_text_from_xlsx(file_path)
+        content = extract_xlsx(file_path, include_images)
         return content, 'xlsx'
     elif file_type == 'image':
         description = get_image_description(file_path)
         return description, 'image'
     else:
         raise ValueError(f"Unsupported file type '{file_type}' for {file_path}")
+
+
+def test_embedding_model() -> Dict[str, Any]:
+    """
+    Test the embedding model using your existing helper functions
+    """
+    try:
+        model = get_best_embedding_model()
+        test_text = "This is a test sentence for embedding dimension detection."
+
+        start_time = time.time()
+        embedding = get_text_embedding(test_text)  # Use your existing function
+        response_time = time.time() - start_time
+
+        return {
+            "success": True,
+            "model_name": model,
+            "vector_size": len(embedding),
+            "response_time_seconds": round(response_time, 3),
+            "sample_values": embedding[:5] if len(embedding) >= 5 else embedding,
+            "test_text": test_text
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "vector_size": None
+        }
+
+
+def is_file_in_qdrant(file_path: str, collection_name: str, qdrant_url: str = QDRANT_URL) -> bool:
+    try:
+        client = QdrantClient(url=qdrant_url)
+        response = client.scroll(
+            collection_name=collection_name,
+            scroll_filter={
+                "must": [
+                    {
+                        "key": "metadata.file_path",
+                        "match": {
+                            "value": file_path
+                        }
+                    }
+                ]
+            },
+            limit=1
+        )
+        return len(response[0]) > 0
+    except Exception as e:
+        print(f"Error checking if file exists in Qdrant: {e}")
+        return False
 
 
 def upload_to_qdrant(
@@ -279,10 +554,8 @@ def upload_to_qdrant(
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
         qdrant_url: str = QDRANT_URL,
+        include_images: bool = True,
 ) -> bool:
-    """
-    Upload file content to Qdrant collection after chunking and embedding
-    """
     try:
         print(f"Processing file: {file_path}")
 
@@ -290,15 +563,18 @@ def upload_to_qdrant(
         print(f"Using collection name: {collection_name}")
 
         try:
-            content, file_type = read_file_content(file_path)
+            content, file_type = read_file_content(file_path, include_images)
             print(f"File type detected: {file_type}")
             print(f"File size: {len(content)} characters")
+            if include_images:
+                print("✓ Including embedded image descriptions")
         except ValueError as e:
             print(f"Error: {str(e)}")
             return False
 
+        # Use your existing get_vector_size function
         vector_size = get_vector_size()
-        print(f"Using vector size: {vector_size}")
+        print(f"Vector size: {vector_size}")
 
         client = QdrantClient(url=qdrant_url)
 
@@ -317,7 +593,6 @@ def upload_to_qdrant(
         else:
             print(f"Using existing collection: {collection_name}")
 
-        # Create chunks from content
         chunks = []
         for i in range(0, len(content), chunk_size - chunk_overlap):
             chunk = content[i:i + chunk_size]
@@ -326,12 +601,12 @@ def upload_to_qdrant(
 
         print(f"Created {len(chunks)} chunks")
 
-        # Process chunks and create points for Qdrant
         points = []
         for chunk_idx, chunk in enumerate(chunks):
             if chunk_idx % 5 == 0:
                 print(f"Processing chunk {chunk_idx + 1}/{len(chunks)}")
 
+            # Use your existing get_text_embedding function
             embedding = get_text_embedding(chunk)
             point_id = str(uuid.uuid4())
 
@@ -346,12 +621,12 @@ def upload_to_qdrant(
                         "chunk_idx": chunk_idx,
                         "filename": file_name,
                         "file_type": file_type,
-                        "flow_id": flow_id
+                        "flow_id": flow_id,
+                        "includes_images": include_images
                     }
                 }
             })
 
-        # Upload to Qdrant
         if points:
             client.upsert(
                 collection_name=collection_name,
@@ -373,14 +648,10 @@ def delete_file_from_qdrant(
         flow_id: str = None,
         qdrant_url: str = QDRANT_URL
 ) -> bool:
-    """
-    Delete all points related to a specific file from Qdrant collection
-    """
     try:
         collection_name = flow_id
         client = QdrantClient(url=qdrant_url)
 
-        # Find all points for this file
         response = client.scroll(
             collection_name=collection_name,
             scroll_filter={
@@ -403,7 +674,6 @@ def delete_file_from_qdrant(
             print(f"No points found for file: {file_path}")
             return True
 
-        # Delete the points
         client.delete(
             collection_name=collection_name,
             points_selector=point_ids
@@ -441,7 +711,6 @@ def get_files_from_collection(
             print(f"Collection '{collection_name}' does not exist")
             return []
 
-        # Get all points from collection
         response = client.scroll(
             collection_name=collection_name,
             scroll_filter={},
@@ -450,7 +719,6 @@ def get_files_from_collection(
             limit=1000
         )
 
-        # Extract unique file information
         file_info_by_path = {}
         for point in response[0]:
             if "metadata" in point.payload:
@@ -463,10 +731,10 @@ def get_files_from_collection(
                         "file_path": file_path,
                         "file_name": metadata.get("filename"),
                         "file_type": metadata.get("file_type"),
-                        "flow_id": metadata.get("flow_id")
+                        "flow_id": metadata.get("flow_id"),
+                        "includes_images": metadata.get("includes_images", False)
                     }
 
-        # Check if files still exist on disk and add file size
         files = []
         for file_path, info in file_info_by_path.items():
             path_obj = Path(file_path)
