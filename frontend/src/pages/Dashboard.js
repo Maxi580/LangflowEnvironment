@@ -10,7 +10,7 @@ import FileManagement from "../components/FileManagement";
 import config from '../config';
 import CookieHelper from "../utils/CookieHelper";
 
-const Dashboard = ({ user }) => { // 🔧 Get user from AuthGuard
+const Dashboard = ({ user }) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -166,7 +166,7 @@ const Dashboard = ({ user }) => { // 🔧 Get user from AuthGuard
         onClose={() => setShowDeleteModal(false)}
         onConfirm={handleDeleteUser}
         isLoading={isDeleting}
-        username={user?.username || 'User'}
+        username={username || 'User'}
       />
     </div>
   );

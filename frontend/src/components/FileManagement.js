@@ -2,9 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import fileService from '../services/FileService';
 import messageService from '../services/MessageService';
 
-/**
- * Compact FileManagement component that fits with the dashboard design
- */
+
 const FileManagement = ({
   flowId,
   setMessages
@@ -14,7 +12,7 @@ const FileManagement = ({
   const [filesError, setFilesError] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isDragging, setIsDragging] = useState(false); // Add drag state
+  const [isDragging, setIsDragging] = useState(false);
 
   // Refs
   const fileInputRef = useRef(null);

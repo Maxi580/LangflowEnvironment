@@ -2,10 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import userService from '../services/UserService';
 
-/**
- * Protected route component that checks authentication
- * Redirects to login if not authenticated
- */
+
 const AuthGuard = ({ children }) => {
   const [authState, setAuthState] = useState({
     isAuthenticated: null, // null = loading, true/false = determined

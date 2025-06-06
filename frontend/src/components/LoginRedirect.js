@@ -3,9 +3,7 @@ import { Navigate } from 'react-router-dom';
 import userService from '../services/UserService';
 import LoginPage from '../pages/Login';
 
-/**
- * Login wrapper that redirects authenticated users to dashboard
- */
+
 const LoginRedirect = () => {
   const [authState, setAuthState] = useState({
     isAuthenticated: null, // null = loading

@@ -1,10 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import messageService from '../services/MessageService';
 
-/**
- * ChatManagement component that handles all chat-related functionality
- * including message display, input handling, and API communication
- */
+
 const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [isSending, setIsSending] = useState(false);

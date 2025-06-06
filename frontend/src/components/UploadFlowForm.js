@@ -1,8 +1,6 @@
 import React, { useState, useRef } from 'react';
 
-/**
- * Form component for uploading LangFlow flows
- */
+
 const UploadFlowForm = ({ onUpload, onClose, isUploading, uploadError }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [flowName, setFlowName] = useState('');

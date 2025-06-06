@@ -825,6 +825,7 @@ def read_file_content(file_path: str, include_images: bool = True) -> Tuple[str,
         return content, 'xlsx'
     elif file_type == 'docx':
         content = extract_docx(file_path, include_images)
+        return content, 'docx'
     elif file_type == 'image':
         description = get_image_description(file_path)
         return description, 'image'
