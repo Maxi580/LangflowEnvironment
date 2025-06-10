@@ -42,12 +42,10 @@ class FileService {
     }
 
     try {
-      // URL: POST /api/collections/{flow_id}
       const response = await TokenRefreshService.authenticatedFetch(
         config.api.getCollectionCreateUrl(flowId),
         {
           method: 'POST'
-          // Backend uses automatic model selection - no body needed
         }
       );
 
@@ -74,7 +72,6 @@ class FileService {
     }
 
     try {
-      // URL: DELETE /api/collections/{flow_id}
       const response = await TokenRefreshService.authenticatedFetch(
         config.api.getCollectionDeleteUrl(flowId),
         {
@@ -99,13 +96,12 @@ class FileService {
    * @param {string} flowId - Flow ID (collection identifier)
    * @returns {Promise<Array>} - Promise resolving to an array of file objects
    */
-  async fetchFiles(flowId) {
+  async fetchUploadedFiles(flowId) {
     if (!flowId) {
       return [];
     }
 
     try {
-      // URL: GET /api/collections/{flow_id}/files
       const response = await TokenRefreshService.authenticatedFetch(
         config.api.getCollectionFilesUrl(flowId),
         {
@@ -115,10 +111,8 @@ class FileService {
 
       if (!response.ok) {
         if (response.status === 404) {
-          // Collection doesn't exist, try to create it first
           console.log(`Collection for flow '${flowId}' not found, creating it...`);
           await this.createCollection(flowId);
-          // Return empty array for new collection
           return [];
         }
         throw new Error(`Error fetching files: ${response.status}`);
@@ -131,6 +125,38 @@ class FileService {
       throw err;
     }
   }
+
+  /**
+   * Gets all files currently being processed for a specific flow
+   * @param {string} flowId - Flow ID to get processing files for
+   * @returns {Promise<Array>} - Array of processing file objects
+   */
+  async getProcessingFiles(flowId) {
+    if (!flowId) {
+      throw new Error("Flow ID is required");
+    }
+
+    try {
+      const response = await TokenRefreshService.authenticatedFetch(
+        config.api.getCollectionProcessingUrl(flowId),
+        {
+          method: 'GET'
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Failed to get processing files: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.processing_files || [];
+    } catch (error) {
+      console.error('Error getting processing files:', error);
+      throw error;
+    }
+  }
+
 
   /**
    * Uploads files to a specific collection
@@ -160,7 +186,6 @@ class FileService {
       try {
         await this.createCollection(flowId);
       } catch (error) {
-        // If collection already exists, that's fine
         if (!error.message.includes('already exists')) {
           throw error;
         }
@@ -168,7 +193,6 @@ class FileService {
 
       const uploadResults = [];
 
-      // Upload files one by one to better handle errors
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const formData = new FormData();
@@ -177,7 +201,6 @@ class FileService {
         formData.append('chunk_overlap', chunkOverlap.toString());
 
         try {
-          // URL: POST /api/collections/{flow_id}/files/upload
           const response = await TokenRefreshService.authenticatedFetch(
             config.api.getCollectionUploadUrl(flowId),
             {
@@ -204,7 +227,6 @@ class FileService {
         }
       }
 
-      // Return summary of all uploads
       const successCount = uploadResults.filter(r => r.success).length;
       const errorCount = uploadResults.length - successCount;
 
@@ -269,7 +291,6 @@ class FileService {
    */
   async checkServerStatus(flowId) {
     try {
-      // Check overall health
       const healthResponse = await fetch(config.api.getHealthUrl());
 
       if (!healthResponse.ok) {
@@ -322,7 +343,7 @@ class FileService {
 
     try {
       // Get all files and find the one with matching ID
-      const files = await this.fetchFiles(flowId);
+      const files = await this.fetchUploadedFiles(flowId);
       const file = files.find(f => f.file_id === fileId);
 
       if (!file) {

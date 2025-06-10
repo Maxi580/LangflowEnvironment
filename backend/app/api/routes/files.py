@@ -16,14 +16,17 @@ from ..utils.qdrant import (
 )
 from ..utils.embedding import test_embedding_model
 from ..utils.health_checks import check_qdrant_connection
+from ..utils.processing_status import processing_tracker
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
+
 
 QDRANT_URL = os.getenv("QDRANT_INTERNAL_URL")
 COLLECTIONS_BASE_ENDPOINT = os.getenv("COLLECTIONS_BASE_ENDPOINT")
 BACKEND_UPLOAD_DIR = os.getenv("BACKEND_UPLOAD_DIR")
-COLLECTIONS_FILES_ENDPOINT = os.getenv("COLLECTIONS_FILES_ENDPOINT", "/files")
-COLLECTIONS_UPLOAD_ENDPOINT = os.getenv("COLLECTIONS_UPLOAD_ENDPOINT", "/files/upload")
+COLLECTIONS_FILES_ENDPOINT = os.getenv("COLLECTIONS_FILES_ENDPOINT")
+COLLECTIONS_UPLOAD_ENDPOINT = os.getenv("COLLECTIONS_UPLOAD_ENDPOINT")
+COLLECTIONS_PROCESSING_ENDPOINT = os.getenv("COLLECTIONS_PROCESSING_ENDPOINT")
 
 router = APIRouter(prefix=COLLECTIONS_BASE_ENDPOINT, tags=["collections"])
 
@@ -237,6 +240,41 @@ async def list_files_in_collection(
         print(f"Error listing files in collection: {e}")
         raise HTTPException(status_code=500, detail=f"Error listing files in collection: {str(e)}")
 
+@router.get(f"/{{flow_id}}{COLLECTIONS_PROCESSING_ENDPOINT}")
+async def get_processing_files(
+        request: Request,
+        flow_id: str
+) -> Dict[str, Any]:
+    try:
+        token = get_user_token(request)
+        if not token:
+            raise HTTPException(status_code=401, detail="No valid authentication token found")
+
+        if not flow_id.strip():
+            raise HTTPException(status_code=400, detail="Flow ID cannot be empty")
+
+        has_access = await verify_user_flow_access(request, flow_id)
+        if not has_access:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access denied: You don't have permission to access flow '{flow_id}'"
+            )
+
+        processing_files_list = processing_tracker.get_files_for_flow(flow_id)
+
+        return {
+            "success": True,
+            "flow_id": flow_id,
+            "processing_files": processing_files_list,
+            "total_processing": len(processing_files_list)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting processing files: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting processing files: {str(e)}")
+
 
 @router.post(f"/{{flow_id}}{COLLECTIONS_UPLOAD_ENDPOINT}")
 async def upload_file_to_collection(
@@ -304,6 +342,17 @@ async def upload_file_to_collection(
         print(f"Uploaded file to: {file_path}")
         print(f"File size: {file_path.stat().st_size} bytes")
 
+        file_info = {
+            "file_id": file_id,
+            "filename": file.filename,
+            "file_path": str(file_path),
+            "flow_id": flow_id,
+            "collection_name": collection_name,
+            "file_size": file_path.stat().st_size,
+            "processing": True
+        }
+        processing_tracker.add_file(file_id, file_info)
+
         def process_file():
             try:
                 print(f"Starting background processing for file: {file_path}")
@@ -313,17 +362,20 @@ async def upload_file_to_collection(
                     file_id=file_id,
                     flow_id=collection_name,
                     chunk_size=chunk_size,
-                    chunk_overlap=chunk_overlap
+                    chunk_overlap=chunk_overlap,
                 )
 
                 if not success:
                     print(f"❌ Failed to process file: {file_path}")
+                    processing_tracker.update_file(file_id, {"status": "failed", "error": "Processing failed"})
                     file_path.unlink(missing_ok=True)
                 else:
+                    processing_tracker.remove_file(file_id)
                     print(f"✅ Successfully processed file: {file_path}")
 
             except Exception as e:
                 print(f"❌ Error processing file in background: {e}")
+                processing_tracker.update_file(file_id, {"status": "failed", "error": str(e)})
                 file_path.unlink(missing_ok=True)
 
         background_tasks.add_task(process_file)
@@ -331,15 +383,7 @@ async def upload_file_to_collection(
         return {
             "success": True,
             "message": f"File '{file.filename}' uploaded successfully and is being processed",
-            "file_info": {
-                "file_id": file_id,
-                "filename": file.filename,
-                "file_path": str(file_path),
-                "flow_id": flow_id,
-                "collection_name": collection_name,
-                "file_size": file_path.stat().st_size,
-                "processing": True
-            }
+            "file_info": file_info
         }
 
     except HTTPException:

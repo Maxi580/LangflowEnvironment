@@ -86,7 +86,6 @@ def upload_to_qdrant(
             print(f"Error: {str(e)}")
             return False
 
-        # Use your existing get_vector_size function
         vector_size = get_vector_size()
         print(f"Vector size: {vector_size}")
 
@@ -120,7 +119,6 @@ def upload_to_qdrant(
             if chunk_idx % 5 == 0:
                 print(f"Processing chunk {chunk_idx + 1}/{len(chunks)}")
 
-            # Use your existing get_text_embedding function
             embedding = get_text_embedding(chunk)
             point_id = str(uuid.uuid4())
 

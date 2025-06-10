@@ -91,7 +91,6 @@ def get_text_embedding(text: str) -> List[float]:
         if len(embedding) == 0:
             raise ValueError("Received empty embedding")
 
-        # Validate that all elements are numbers
         if not all(isinstance(x, (int, float)) for x in embedding):
             raise ValueError("Embedding contains non-numeric values")
 
@@ -357,7 +356,7 @@ def get_best_vision_model() -> str:
 def get_ollama_image_description_from_bytes(image_data: bytes) -> str:
     """
     Get image description from image bytes using your existing vision model helper
-    This is a wrapper around your existing get_ollama_image_description function
+    This is a wrapper around the existing get_ollama_image_description function
 
     Args:
         image_data: Raw image bytes
@@ -366,8 +365,6 @@ def get_ollama_image_description_from_bytes(image_data: bytes) -> str:
         String description of the image
     """
     try:
-        # Determine file extension based on image data header
-        # This helps Ollama better understand the image format
         if image_data.startswith(b'\xff\xd8\xff'):
             suffix = '.jpg'
         elif image_data.startswith(b'\x89PNG\r\n\x1a\n'):

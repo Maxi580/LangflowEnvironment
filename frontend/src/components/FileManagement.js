@@ -2,37 +2,50 @@ import React, { useState, useEffect, useRef } from 'react';
 import fileService from '../services/FileService';
 import messageService from '../services/MessageService';
 
-
 const FileManagement = ({
   flowId,
   setMessages
 }) => {
-  const [files, setFiles] = useState([]);
+  const [completedFiles, setCompletedFiles] = useState([]);
+  const [processingFiles, setProcessingFiles] = useState([]);
   const [isFilesLoading, setIsFilesLoading] = useState(false);
   const [filesError, setFilesError] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Refs
   const fileInputRef = useRef(null);
-
-  // Check server status and fetch models on component mount
-  useEffect(() => {
-    // Component initialization if needed
-  }, []);
 
   // Fetch files when flowId changes
   useEffect(() => {
     if (flowId) {
       fetchFiles();
     } else {
-      setFiles([]);
+      setCompletedFiles([]);
+      setProcessingFiles([]);
     }
   }, [flowId]);
 
+  // Auto-refresh when there are processing files
+  useEffect(() => {
+    let intervalId;
+
+    if (processingFiles.length > 0 && flowId) {
+      // Start polling every 5 seconds when there are processing files
+      intervalId = setInterval(() => {
+        fetchFiles();
+      }, 5000);
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [processingFiles.length, flowId]);
+
   /**
-   * Fetches files for the current flowId
+   * Fetches both completed and processing files separately
    */
   const fetchFiles = async () => {
     if (!flowId) return;
@@ -41,13 +54,55 @@ const FileManagement = ({
     setFilesError(null);
 
     try {
-      const filesList = await fileService.fetchFiles(flowId);
-      setFiles(filesList);
+      const [completed, processing] = await Promise.all([
+        fileService.fetchUploadedFiles(flowId),
+        fileService.getProcessingFiles(flowId)
+      ]);
+
+      setCompletedFiles(completed);
+      setProcessingFiles(processing);
     } catch (err) {
       console.error("Failed to fetch files:", err);
       setFilesError(err.message);
     } finally {
       setIsFilesLoading(false);
+    }
+  };
+
+  /**
+   * Enhanced file display with status indicators
+   */
+  const getStatusBadge = (fileStatus) => {
+    switch (fileStatus) {
+      case 'processing':
+        return (
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-900/20 text-orange-400">
+            <svg className="animate-spin -ml-1 mr-1 h-3 w-3" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Processing
+          </span>
+        );
+      case 'failed':
+        return (
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-900/20 text-red-400">
+            <svg className="-ml-1 mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            Failed
+          </span>
+        );
+      case 'completed':
+      default:
+        return (
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-900/20 text-green-400">
+            <svg className="-ml-1 mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            Ready
+          </span>
+        );
     }
   };
 
@@ -64,7 +119,6 @@ const FileManagement = ({
   const handleDragLeave = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    // Only set dragging to false if we're leaving the drop zone entirely
     if (!e.currentTarget.contains(e.relatedTarget)) {
       setIsDragging(false);
     }
@@ -91,7 +145,7 @@ const FileManagement = ({
   };
 
   /**
-   * Handles file upload (works for both drag/drop and click upload)
+   * Handles file upload
    */
   const handleFileUpload = async (event) => {
     const filesToUpload = event.target.files;
@@ -106,7 +160,7 @@ const FileManagement = ({
 
     try {
       await fileService.uploadFiles(filesToUpload, flowId);
-      fetchFiles();
+      fetchFiles(); // Refresh to show processing files
 
       const fileNames = Array.from(filesToUpload).map(f => f.name).join(', ');
       const message = messageService.createSystemMessage(
@@ -132,7 +186,7 @@ const FileManagement = ({
   };
 
   /**
-   * Handles file deletion
+   * Handles completed file deletion
    */
   const handleDeleteFile = async (filePath) => {
     if (!flowId) {
@@ -162,6 +216,14 @@ const FileManagement = ({
         setMessages(prev => [...prev, errorMessage]);
       }
     }
+  };
+
+  /**
+   * Handles processing file removal (for failed files)
+   */
+  const handleDeleteProcessingFile = async (fileId) => {
+    // For now, just refresh the files list
+    fetchFiles();
   };
 
   const getFileIcon = (fileType) => {
@@ -197,6 +259,8 @@ const FileManagement = ({
     );
   };
 
+  const totalFiles = completedFiles.length + processingFiles.length;
+
   return (
     <div className="bg-slate-800 rounded-xl overflow-hidden">
       {/* Header */}
@@ -214,7 +278,14 @@ const FileManagement = ({
         </div>
 
         <div className="flex items-center space-x-2">
-          <span className="text-slate-400 text-sm">{files.length} files</span>
+          <span className="text-slate-400 text-sm">
+            {totalFiles} files
+            {processingFiles.length > 0 && (
+              <span className="text-orange-400 ml-1">
+                ({processingFiles.length} processing)
+              </span>
+            )}
+          </span>
 
           {/* Refresh Button */}
           <button
@@ -255,7 +326,7 @@ const FileManagement = ({
 
       {/* Content */}
       <div className="p-4 space-y-4">
-        {/* Upload Section with Drag and Drop */}
+        {/* Upload Section */}
         <div>
           <div
             className={`flex items-center justify-center w-full px-3 py-2 text-sm border-2 border-dashed rounded-lg transition-colors cursor-pointer
@@ -306,7 +377,7 @@ const FileManagement = ({
           </div>
         </div>
 
-        {/* Files Loading */}
+        {/* Loading State */}
         {isFilesLoading && (
           <div className="flex items-center justify-center py-4 text-slate-400 text-sm">
             <svg className="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24">
@@ -317,7 +388,7 @@ const FileManagement = ({
           </div>
         )}
 
-        {/* Files Error */}
+        {/* Error State */}
         {filesError && (
           <div className="p-3 bg-red-900/20 border border-red-700 rounded-lg">
             <div className="text-red-400 text-sm">{filesError}</div>
@@ -331,52 +402,103 @@ const FileManagement = ({
         )}
 
         {/* Files List */}
-        {!isFilesLoading && !filesError && files.length > 0 && (
+        {!isFilesLoading && !filesError && totalFiles > 0 && (
           <div className="space-y-2">
-            {/* Show first 3 files by default, or all if expanded */}
-            {(isExpanded ? files : files.slice(0, 3)).map((file) => (
-              <div
-                key={file.file_id}
-                className="flex items-center justify-between p-2 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors group"
-              >
-                <div className="flex items-center space-x-2 flex-1 min-w-0">
-                  <div className="flex-shrink-0">
-                    {getFileIcon(file.file_type)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-white truncate">{file.file_name}</div>
-                    <div className="text-xs text-slate-400">
-                      {fileService.formatFileSize(file.file_size)} • {file.file_type.toUpperCase()}
+            {/* Completed Files Section - Now at the top */}
+            {completedFiles.length > 0 && (
+              <div className="space-y-2">
+                {(isExpanded ? completedFiles : completedFiles.slice(0, 3)).map((file) => (
+                  <div
+                    key={file.file_id}
+                    className="flex items-center justify-between p-2 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors group"
+                  >
+                    <div className="flex items-center space-x-2 flex-1 min-w-0">
+                      <div className="flex-shrink-0">
+                        {getFileIcon(file.file_type)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-white truncate">{file.file_name}</div>
+                        <div className="text-xs text-slate-400">
+                          {fileService.formatFileSize(file.file_size)} • {file.file_type.toUpperCase()}
+                        </div>
+                      </div>
                     </div>
+
+                    <button
+                      onClick={() => handleDeleteFile(file.file_path)}
+                      className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-600 rounded transition-all"
+                      title="Delete file"
+                    >
+                      <svg className="w-3 h-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
-                </div>
+                ))}
 
-                <button
-                  onClick={() => handleDeleteFile(file.file_path)}
-                  className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-600 rounded transition-all"
-                  title="Delete file"
-                >
-                  <svg className="w-3 h-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                {/* Show more indicator for completed files */}
+                {!isExpanded && completedFiles.length > 3 && (
+                  <button
+                    onClick={() => setIsExpanded(true)}
+                    className="w-full text-center py-2 text-sm text-slate-400 hover:text-slate-300 transition-colors"
+                  >
+                    +{completedFiles.length - 3} more files
+                  </button>
+                )}
               </div>
-            ))}
+            )}
 
-            {/* Show more indicator */}
-            {!isExpanded && files.length > 3 && (
-              <button
-                onClick={() => setIsExpanded(true)}
-                className="w-full text-center py-2 text-sm text-slate-400 hover:text-slate-300 transition-colors"
-              >
-                +{files.length - 3} more files
-              </button>
+            {/* Processing Files Section - Now at the bottom with header and styling */}
+            {processingFiles.length > 0 && (
+              <div className="space-y-2">
+                {completedFiles.length > 0 && <div className="mt-4"></div>}
+                <div className="text-xs text-orange-400 font-medium uppercase tracking-wide">
+                  Processing ({processingFiles.length})
+                </div>
+                {processingFiles.map((file) => (
+                  <div
+                    key={file.file_id}
+                    className="flex items-center justify-between p-2 bg-orange-900/20 border border-orange-700/50 rounded-lg transition-colors group"
+                  >
+                    <div className="flex items-center space-x-2 flex-1 min-w-0">
+                      <div className="flex-shrink-0">
+                        {getFileIcon(file.file_type)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2">
+                          <div className="text-sm text-white truncate">{file.filename}</div>
+                          {getStatusBadge(file.status)}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          {fileService.formatFileSize(file.file_size)} • {(file.file_type || 'unknown').toUpperCase()}
+                          {file.error && (
+                            <span className="text-red-400 ml-2">• {file.error}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Only show delete for failed files */}
+                    {file.status === 'failed' && (
+                      <button
+                        onClick={() => handleDeleteProcessingFile(file.file_id)}
+                        className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-600 rounded transition-all"
+                        title="Remove failed file"
+                      >
+                        <svg className="w-3 h-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}
 
         {/* No Files State */}
-        {!isFilesLoading && !filesError && files.length === 0 && (
+        {!isFilesLoading && !filesError && totalFiles === 0 && (
           <div className="text-center py-6">
             <svg className="w-8 h-8 mx-auto mb-2 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -386,7 +508,7 @@ const FileManagement = ({
           </div>
         )}
 
-        {/* Collection Info (when expanded) */}
+        {/* Collection Info */}
         {isExpanded && flowId && (
           <div className="pt-3 border-t border-slate-700">
             <div className="text-xs text-slate-400 mb-2">Collection ID:</div>

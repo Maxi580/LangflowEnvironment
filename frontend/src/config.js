@@ -3,9 +3,6 @@ const BACKEND_API = process.env.REACT_APP_BACKEND_API || 'http://localhost:8000'
 const APP_VERSION = process.env.REACT_APP_VERSION || '1.0.0';
 
 const HEALTH_BASE_ENDPOINT = process.env.REACT_APP_HEALTH_BASE_ENDPOINT || '/health';
-const HEALTH_OLLAMA_ENDPOINT = process.env.REACT_APP_HEALTH_OLLAMA_ENDPOINT || '/health/ollama';
-const HEALTH_QDRANT_ENDPOINT = process.env.REACT_APP_HEALTH_QDRANT_ENDPOINT || '/health/qdrant';
-const HEALTH_LANGFLOW_ENDPOINT = process.env.REACT_APP_HEALTH_LANGFLOW_ENDPOINT || '/health/langflow';
 
 const USERS_BASE_ENDPOINT = process.env.REACT_APP_USERS_BASE_ENDPOINT || '/api/users';
 const USERS_LOGIN_ENDPOINT = process.env.REACT_APP_USERS_LOGIN_ENDPOINT || '/login';
@@ -26,6 +23,7 @@ const REDIRECT_LANGFLOW_ENDPOINT = process.env.REACT_APP_REDIRECT_LANGFLOW_ENDPO
 const COLLECTIONS_BASE_ENDPOINT = process.env.REACT_APP_COLLECTIONS_BASE_ENDPOINT || '/api/collections';
 const COLLECTIONS_FILES_ENDPOINT = process.env.REACT_APP_COLLECTIONS_FILES_ENDPOINT || '/files';
 const COLLECTIONS_UPLOAD_ENDPOINT = process.env.REACT_APP_COLLECTIONS_UPLOAD_ENDPOINT || '/files/upload';
+const COLLECTIONS_PROCESSING_ENDPOINT = process.env.COLLECTIONS_PROCESSING_ENDPOINT || '/processing';
 
 const ACCESS_COOKIE_NAME = process.env.REACT_APP_ACCESS_COOKIE_NAME || 'dashboard_access_token';
 const REFRESH_COOKIE_NAME = process.env.REACT_APP_REFRESH_COOKIE_NAME || 'dashboard_refresh_token';
@@ -47,21 +45,10 @@ const config = {
    langflowUrl: LANGFLOW_API,
    backendUrl: BACKEND_API,
 
-   getBackendUrl: () => BACKEND_API,
-   getFilesUrl: () => `${BACKEND_API}/api/files`,
-   getUploadUrl: () => `${BACKEND_API}/api/files/upload`,
-   getModelsUrl: () => `${BACKEND_API}/api/models`,
-   getStatusUrl: () => `${BACKEND_API}${HEALTH_BASE_ENDPOINT}`,
-   getUsersUrl: () => `${BACKEND_API}${USERS_BASE_ENDPOINT}`,
    getUserDeleteUrl: (userId) => `${BACKEND_API}${USERS_BASE_ENDPOINT}/${userId}`,
 
-   // Health endpoints
    getHealthUrl: () => `${BACKEND_API}${HEALTH_BASE_ENDPOINT}`,
-   getHealthOllamaUrl: () => `${BACKEND_API}${HEALTH_BASE_ENDPOINT}${HEALTH_OLLAMA_ENDPOINT}`,
-   getHealthQdrantUrl: () => `${BACKEND_API}${HEALTH_BASE_ENDPOINT}${HEALTH_QDRANT_ENDPOINT}`,
-   getHealthLangflowUrl: () => `${BACKEND_API}${HEALTH_BASE_ENDPOINT}${HEALTH_LANGFLOW_ENDPOINT}`,
 
-   // User endpoints
    getUsersBaseUrl: () => `${BACKEND_API}${USERS_BASE_ENDPOINT}`,
    getUsersLoginUrl: () => `${BACKEND_API}${USERS_BASE_ENDPOINT}${USERS_LOGIN_ENDPOINT}`,
    getUsersRefreshTokenUrl: () => `${BACKEND_API}${USERS_BASE_ENDPOINT}${USERS_REFRESH_TOKEN_ENDPOINT}`,
@@ -69,29 +56,22 @@ const config = {
    getUsersVerifyAuthUrl: () => `${BACKEND_API}${USERS_BASE_ENDPOINT}${USERS_VERIFY_AUTH_ENDPOINT}`,
    getUsersAuthStatusUrl: () => `${BACKEND_API}${USERS_BASE_ENDPOINT}${USERS_AUTH_STATUS_ENDPOINT}`,
 
-   // Flow endpoints
    getFlowsBaseUrl: () => `${BACKEND_API}${FLOWS_BASE_ENDPOINT}`,
    getFlowsUploadUrl: () => `${BACKEND_API}${FLOWS_BASE_ENDPOINT}${FLOWS_UPLOAD_ENDPOINT}`,
    getFlowDeleteUrl: (flowId) => `${BACKEND_API}${FLOWS_BASE_ENDPOINT}/${flowId}`,
 
-   // Message endpoints
-   getMessagesBaseUrl: () => `${BACKEND_API}${MESSAGES_BASE_ENDPOINT}`,
    getMessagesSendUrl: () => `${BACKEND_API}${MESSAGES_BASE_ENDPOINT}${MESSAGES_SEND_ENDPOINT}`,
    getMessagesSessionUrl: (sessionId) => `${BACKEND_API}${MESSAGES_BASE_ENDPOINT}/session/${sessionId}`,
 
-   // Redirect endpoints
-   getRedirectBaseUrl: () => `${BACKEND_API}${REDIRECT_BASE_ENDPOINT}`,
    getRedirectLangflowUrl: () => `${BACKEND_API}${REDIRECT_BASE_ENDPOINT}${REDIRECT_LANGFLOW_ENDPOINT}`,
 
-   // Collections endpoints - matching backend API structure
    getCollectionsBaseUrl: () => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}`,
 
-   // Collection management (flow_id based)
    getCollectionCreateUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}/${flowId}`,
    getCollectionDeleteUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}/${flowId}`,
 
-   // Collection files management
    getCollectionFilesUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}/${flowId}${COLLECTIONS_FILES_ENDPOINT}`,
+   getCollectionProcessingUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}/${flowId}${COLLECTIONS_PROCESSING_ENDPOINT}`,
    getCollectionUploadUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}/${flowId}${COLLECTIONS_UPLOAD_ENDPOINT}`,
    getCollectionFileDeleteUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}/${flowId}${COLLECTIONS_FILES_ENDPOINT}`,
   },
