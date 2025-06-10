@@ -6,7 +6,10 @@ import time
 import jwt
 from typing import Dict, Any, Optional, Tuple
 from pydantic import BaseModel
-from ..utils.jwt_helper import get_token_expiry
+from ..utils.jwt_helper import get_token_expiry, get_user_token
+from .flows import get_flows_with_token
+from ..utils.qdrant import delete_multiple_collections
+from ..utils.health_checks import check_qdrant_connection
 
 LANGFLOW_URL = os.getenv("LANGFLOW_INTERNAL_URL")
 SUPERUSER_USERNAME = os.getenv("BACKEND_LF_USERNAME")
@@ -592,10 +595,65 @@ async def get_auth_status(request: Request) -> Dict[str, Any]:
         }
 
 
-@router.delete("/{user_id}")
-async def delete_user(user_id: str) -> Dict[str, Any]:
+async def cleanup_user_flows_and_collections(user_token: str) -> Dict[str, Any]:
+    cleanup_results = {
+        "flows_found": 0,
+        "collections_deleted": 0,
+        "deleted_collections": [],
+        "cleanup_errors": []
+    }
+
     try:
+        user_flows = await get_flows_with_token(
+            token=user_token,
+            remove_example_flows=True,
+            header_flows=False,
+            get_all=True
+        )
+
+        cleanup_results["flows_found"] = len(user_flows)
+
+        print(f"Found {len(user_flows)} flows for user deletion")
+
+        if user_flows and check_qdrant_connection():
+            flow_ids = [flow.get('id') for flow in user_flows if flow.get('id')]
+
+            if flow_ids:
+                # Use the shared collection deletion helper
+                deletion_results = delete_multiple_collections(flow_ids)
+
+                cleanup_results["collections_deleted"] = deletion_results["success_count"]
+                cleanup_results["deleted_collections"] = deletion_results["successful_deletions"]
+
+                # Add any collection deletion errors
+                if deletion_results["failed_deletions"]:
+                    cleanup_results["cleanup_errors"].extend([
+                        failure["message"] for failure in deletion_results["failed_deletions"]
+                    ])
+
+                print(f"✓ Deleted {deletion_results['success_count']} collections")
+                print(f"✗ Failed to delete {deletion_results['error_count']} collections")
+
+        return cleanup_results
+
+    except Exception as e:
+        error_msg = f"Error during flow/collection cleanup: {str(e)}"
+        cleanup_results["cleanup_errors"].append(error_msg)
+        print(error_msg)
+        return cleanup_results
+
+
+@router.delete("/{user_id}")
+async def delete_user(request: Request, user_id: str) -> Dict[str, Any]:
+    """Delete a user and clean up all associated flows and collections"""
+    try:
+        user_token = get_user_token(request)
+        if not user_token:
+            raise HTTPException(status_code=401, detail="No valid authentication token found")
+
         admin_token = get_admin_token()
+
+        cleanup_results = await cleanup_user_flows_and_collections(user_token)
 
         headers = {
             'Content-Type': 'application/json',
@@ -610,13 +668,15 @@ async def delete_user(user_id: str) -> Dict[str, Any]:
             return {
                 "success": False,
                 "message": f"Failed to delete user: {delete_response.text}",
-                "status_code": delete_response.status_code
+                "status_code": delete_response.status_code,
+                "cleanup_performed": cleanup_results
             }
 
         return {
             "success": True,
             "message": f"User with ID '{user_id}' deleted successfully",
-            "user_id": user_id
+            "user_id": user_id,
+            "cleanup_performed": cleanup_results
         }
 
     except HTTPException as e:

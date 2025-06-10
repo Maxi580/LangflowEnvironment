@@ -12,7 +12,8 @@ from ..utils.qdrant import (
     get_files_from_collection,
     is_file_in_qdrant,
     construct_collection_name,
-    verify_user_flow_access
+    verify_user_flow_access,
+    delete_single_collection
 )
 from ..utils.embedding import test_embedding_model
 from ..utils.health_checks import check_qdrant_connection
@@ -134,7 +135,6 @@ async def delete_collection(
         request: Request,
         flow_id: str
 ) -> Dict[str, Any]:
-    """Delete a Qdrant collection using flow_id"""
     try:
         token = get_user_token(request)
         if not token:
@@ -153,33 +153,15 @@ async def delete_collection(
                 detail=f"Access denied: You don't have permission to access flow '{flow_id}'"
             )
 
-        collection_name = construct_collection_name(flow_id)
+        result = delete_single_collection(flow_id)
 
-        client = QdrantClient(url=QDRANT_URL)
+        if not result["success"]:
+            if result["error"] == "not_found":
+                raise HTTPException(status_code=404, detail=result["message"])
+            else:
+                raise HTTPException(status_code=500, detail=result["message"])
 
-        collections = client.get_collections().collections
-        existing_collection_names = [c.name for c in collections]
-
-        if collection_name not in existing_collection_names:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Collection for flow '{flow_id}' not found"
-            )
-
-        collection_info = client.get_collection(collection_name)
-        points_count = collection_info.points_count
-
-        client.delete_collection(collection_name)
-
-        print(f"Deleted collection: {collection_name} for flow: {flow_id} (had {points_count} points)")
-
-        return {
-            "success": True,
-            "message": f"Collection for flow '{flow_id}' deleted successfully",
-            "flow_id": flow_id,
-            "collection_name": collection_name,
-            "points_deleted": points_count
-        }
+        return result
 
     except HTTPException:
         raise
@@ -420,7 +402,6 @@ async def delete_file_from_collection(
 
         collection_name = construct_collection_name(flow_id)
 
-        # Check if collection exists
         client = QdrantClient(url=QDRANT_URL)
         collections = client.get_collections().collections
         existing_collection_names = [c.name for c in collections]

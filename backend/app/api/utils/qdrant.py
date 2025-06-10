@@ -261,3 +261,74 @@ def get_files_from_collection(
     except Exception as e:
         print(f"Error querying Qdrant for files in collection {collection_name}: {e}")
         return []
+
+
+def delete_single_collection(flow_id: str, qdrant_url: str = QDRANT_URL) -> Dict[str, Any]:
+    """
+    Delete a single Qdrant collection by flow_id
+    Returns result with success status and details
+    """
+    try:
+        collection_name = construct_collection_name(flow_id)
+        client = QdrantClient(url=qdrant_url)
+
+        collections = client.get_collections().collections
+        existing_collection_names = [c.name for c in collections]
+
+        if collection_name not in existing_collection_names:
+            return {
+                "success": False,
+                "error": "not_found",
+                "message": f"Collection for flow '{flow_id}' not found",
+                "flow_id": flow_id,
+                "collection_name": collection_name
+            }
+
+        collection_info = client.get_collection(collection_name)
+        points_count = collection_info.points_count
+
+        client.delete_collection(collection_name)
+
+        print(f"Deleted collection: {collection_name} for flow: {flow_id} (had {points_count} points)")
+
+        return {
+            "success": True,
+            "message": f"Collection for flow '{flow_id}' deleted successfully",
+            "flow_id": flow_id,
+            "collection_name": collection_name,
+            "points_deleted": points_count
+        }
+
+    except Exception as e:
+        error_msg = f"Error deleting collection for flow {flow_id}: {str(e)}"
+        print(error_msg)
+        return {
+            "success": False,
+            "error": "deletion_failed",
+            "message": error_msg,
+            "flow_id": flow_id,
+            "collection_name": construct_collection_name(flow_id)
+        }
+
+
+def delete_multiple_collections(flow_ids: List[str], qdrant_url: str = QDRANT_URL) -> Dict[str, Any]:
+    results = {
+        "success_count": 0,
+        "error_count": 0,
+        "successful_deletions": [],
+        "failed_deletions": [],
+        "total_points_deleted": 0
+    }
+
+    for flow_id in flow_ids:
+        deletion_result = delete_single_collection(flow_id, qdrant_url)
+
+        if deletion_result["success"]:
+            results["success_count"] += 1
+            results["successful_deletions"].append(deletion_result)
+            results["total_points_deleted"] += deletion_result.get("points_deleted", 0)
+        else:
+            results["error_count"] += 1
+            results["failed_deletions"].append(deletion_result)
+
+    return results

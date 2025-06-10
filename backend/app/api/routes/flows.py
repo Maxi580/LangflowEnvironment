@@ -16,18 +16,16 @@ FLOWS_UPLOAD_ENDPOINT = os.getenv("FLOWS_UPLOAD_ENDPOINT")
 router = APIRouter(prefix=FLOWS_BASE_ENDPOINT, tags=["flows"])
 
 
-@router.get("")
-async def get_flows(
-        request: Request,
+async def get_flows_with_token(
+        token: str,
         remove_example_flows: bool = True,
         header_flows: bool = False,
         get_all: bool = True
 ) -> List[Dict[str, Any]]:
+    """
+    Get flows using a provided token (shared logic for both user and admin contexts)
+    """
     try:
-        token = get_user_token(request)
-        if not token:
-            raise HTTPException(status_code=401, detail="No valid Langflow access token found")
-
         params = {
             'get_all': str(get_all).lower(),
             'remove_example_flows': str(remove_example_flows).lower(),
@@ -57,7 +55,6 @@ async def get_flows(
 
         flows = response.json()
         print(f"Retrieved {len(flows)} flows")
-
         return flows
 
     except HTTPException:
@@ -68,6 +65,25 @@ async def get_flows(
     except Exception as e:
         print(f"Error getting flows: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting flows: {str(e)}")
+
+
+@router.get("")
+async def get_flows(
+        request: Request,
+        remove_example_flows: bool = True,
+        header_flows: bool = False,
+        get_all: bool = True
+) -> List[Dict[str, Any]]:
+    token = get_user_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="No valid Langflow access token found")
+
+    return await get_flows_with_token(
+        token=token,
+        remove_example_flows=remove_example_flows,
+        header_flows=header_flows,
+        get_all=get_all
+    )
 
 
 @router.get("/{flow_id}/component-ids")
@@ -129,6 +145,7 @@ async def get_component_ids(request: Request, flow_id: str) -> Dict[str, Any]:
     except Exception as e:
         print(f"Error getting component IDs: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting component IDs: {str(e)}")
+
 
 @router.post(FLOWS_UPLOAD_ENDPOINT)
 async def upload_flow(
