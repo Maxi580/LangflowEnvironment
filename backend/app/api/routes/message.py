@@ -1,36 +1,18 @@
 from fastapi import APIRouter, HTTPException, Request
-import requests
-import json
+from typing import Dict, Any
 import os
-import time
-from typing import Dict, Any, Optional
-from pydantic import BaseModel
 
-from .flows import get_component_ids
-from ..utils.jwt_helper import get_user_token
-from ..utils.api_key import TemporaryApiKey, create_api_key_headers
-from ..utils.message_helper import extract_bot_response
+from ...services.message_service import MessageService
+from ...models.message import MessageRequest, MessageResponse
 
-LANGFLOW_URL = os.getenv("LANGFLOW_INTERNAL_URL")
-LF_RUN_FLOW_ENDPOINT = os.getenv("LF_RUN_FLOW_ENDPOINT")
 MESSAGES_BASE_ENDPOINT = os.getenv("MESSAGES_BASE_ENDPOINT")
 MESSAGES_SEND_ENDPOINT = os.getenv("MESSAGES_SEND_ENDPOINT")
+MESSAGES_SESSION_INFO_ENDPOINT = os.getenv("MESSAGES_SESSION_INFO_ENDPOINT")
+MESSAGES_LIST_SESSIONS_ENDPOINT = os.getenv("MESSAGES_LIST_SESSIONS_ENDPOINT")
+MESSAGES_END_SESSION_ENDPOINT = os.getenv("MESSAGES_END_SESSION_ENDPOINT")
 
 router = APIRouter(prefix=MESSAGES_BASE_ENDPOINT, tags=["messages"])
-
-
-class MessageRequest(BaseModel):
-    message: str
-    flow_id: str
-    session_id: Optional[str] = None
-
-
-class MessageResponse(BaseModel):
-    success: bool
-    response: str
-    session_id: str
-    raw_response: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+message_service = MessageService()
 
 
 @router.post(MESSAGES_SEND_ENDPOINT, response_model=MessageResponse)
@@ -38,119 +20,84 @@ async def send_message(
         request: Request,
         message_request: MessageRequest
 ) -> MessageResponse:
+    """Send a message to a flow and get response"""
     try:
-        # Get user token for API key creation
-        user_token = get_user_token(request)
-        if not user_token:
-            raise HTTPException(status_code=401, detail="No valid authentication token found")
-
-        if not message_request.message.strip():
-            raise HTTPException(status_code=400, detail="Message cannot be empty")
-
-        if not message_request.flow_id:
-            raise HTTPException(status_code=400, detail="Flow ID is required")
-
-        session_id = message_request.session_id or f"session_{int(time.time())}_{os.urandom(4).hex()}"
-
-        print(f"Getting component IDs for flow: {message_request.flow_id}")
-
-        component_data = await get_component_ids(request, message_request.flow_id)
-        component_ids = component_data.get('component_ids', [])
-
-        qdrant_component_ids = [
-            comp_id for comp_id in component_ids
-            if 'qdrant' in comp_id.lower()
-        ]
-
-        print(f"Found {len(component_ids)} total components")
-        print(f"Found {len(qdrant_component_ids)} Qdrant components: {qdrant_component_ids}")
-
-        payload = {
-            "input_value": message_request.message,
-            "output_type": "chat",
-            "input_type": "chat",
-            "session_id": session_id
-        }
-
-        if qdrant_component_ids:
-            tweaks = {}
-            for qdrant_id in qdrant_component_ids:
-                tweaks[qdrant_id] = {
-                    "collection_name": message_request.flow_id
-                }
-            payload["tweaks"] = tweaks
-            print(f"Added collection_name tweaks for Qdrant components: {list(tweaks.keys())}")
-
-        print(f"Processing message request - Flow: {message_request.flow_id}, Session: {session_id}")
-
-        with TemporaryApiKey(user_token) as api_key:
-            url = f"{LANGFLOW_URL}{LF_RUN_FLOW_ENDPOINT.format(flow_id=message_request.flow_id)}"
-            headers = create_api_key_headers(api_key)
-
-            response = requests.post(url, headers=headers, json=payload, timeout=3600)
-
-            if not response.ok:
-                if response.status_code == 401:
-                    raise HTTPException(status_code=401, detail="Langflow authentication failed")
-                if response.status_code == 404:
-                    raise HTTPException(status_code=404, detail="Flow not found")
-
-                error_text = response.text
-                print(f"LangFlow error response: {error_text}")
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"LangFlow error: {error_text}"
-                )
-
-            response_data = response.json()
-            print(f"LangFlow raw response: {json.dumps(response_data, indent=2)}")
-
-        bot_response = extract_bot_response(response_data)
-
-        return MessageResponse(
-            success=True,
-            response=bot_response,
-            session_id=session_id,
-            raw_response=response_data
-        )
-
-    except HTTPException:
-        raise
-    except requests.exceptions.Timeout:
-        print("LangFlow request timeout")
-        raise HTTPException(status_code=504, detail="Request to LangFlow timed out")
-    except requests.exceptions.RequestException as e:
-        print(f"Connection error to Langflow: {e}")
+        result = await message_service.send_message_to_flow(request, message_request)
+        return result
+    except ValueError as e:
+        error_msg = str(e)
+        if "authentication" in error_msg.lower() or "token" in error_msg.lower():
+            raise HTTPException(status_code=401, detail=error_msg)
+        elif "empty" in error_msg.lower() or "required" in error_msg.lower():
+            raise HTTPException(status_code=400, detail=error_msg)
+        elif "not found" in error_msg.lower():
+            raise HTTPException(status_code=404, detail=error_msg)
+        elif "access denied" in error_msg.lower():
+            raise HTTPException(status_code=403, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
+    except TimeoutError as e:
+        raise HTTPException(status_code=504, detail="Request to Langflow timed out")
+    except ConnectionError as e:
         raise HTTPException(status_code=503, detail=f"Could not connect to Langflow: {str(e)}")
-    except json.JSONDecodeError as e:
-        print(f"Error parsing LangFlow response: {e}")
-        raise HTTPException(status_code=502, detail="Invalid response format from LangFlow")
     except Exception as e:
-        print(f"Error sending message: {e}")
         raise HTTPException(status_code=500, detail=f"Error sending message: {str(e)}")
 
 
-@router.get("/session/{session_id}")
+@router.get(MESSAGES_SESSION_INFO_ENDPOINT)
 async def get_session_info(
         request: Request,
         session_id: str
 ) -> Dict[str, Any]:
-    """
-    Get information about a chat session
-    """
+    """Get information about a chat session"""
     try:
-        token = get_user_token(request)
-        if not token:
-            raise HTTPException(status_code=401, detail="No valid authentication token found")
-
-        return {
-            "session_id": session_id,
-            "status": "active",
-            "message": "Session information retrieved"
-        }
-
-    except HTTPException:
-        raise
+        session_info = await message_service.get_session_information(request, session_id)
+        return session_info.dict()
+    except ValueError as e:
+        error_msg = str(e)
+        if "authentication" in error_msg.lower() or "token" in error_msg.lower():
+            raise HTTPException(status_code=401, detail=error_msg)
+        elif "not found" in error_msg.lower():
+            raise HTTPException(status_code=404, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
     except Exception as e:
-        print(f"Error getting session info: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting session info: {str(e)}")
+
+
+@router.get(MESSAGES_LIST_SESSIONS_ENDPOINT)
+async def list_user_sessions(request: Request) -> Dict[str, Any]:
+    """List all active sessions for the user"""
+    try:
+        sessions = await message_service.get_user_sessions(request)
+        return {
+            "success": True,
+            "sessions": sessions,
+            "total_sessions": len(sessions)
+        }
+    except ValueError as e:
+        error_msg = str(e)
+        if "authentication" in error_msg.lower() or "token" in error_msg.lower():
+            raise HTTPException(status_code=401, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing sessions: {str(e)}")
+
+
+@router.delete(MESSAGES_END_SESSION_ENDPOINT)
+async def end_session(request: Request, session_id: str) -> Dict[str, Any]:
+    """End a specific chat session"""
+    try:
+        result = await message_service.end_chat_session(request, session_id)
+        return result.dict()
+    except ValueError as e:
+        error_msg = str(e)
+        if "authentication" in error_msg.lower() or "token" in error_msg.lower():
+            raise HTTPException(status_code=401, detail=error_msg)
+        elif "not found" in error_msg.lower():
+            raise HTTPException(status_code=404, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error ending session: {str(e)}")

@@ -5,9 +5,9 @@ from dotenv import load_dotenv
 from .api.routes.health import router as health_router
 from .api.routes.user import router as user_router
 from .api.routes.redirect import router as redirect_router
-from .api.routes.flows import router as flow_router
+from .api.routes.flow import router as flow_router
 from .api.routes.message import router as apikey_router
-from .api.routes.files import router as qdrant_router
+from .api.routes.collections import router as qdrant_router
 
 load_dotenv()
 

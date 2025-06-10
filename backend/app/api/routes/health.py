@@ -1,62 +1,47 @@
-from datetime import datetime
 from fastapi import APIRouter, HTTPException
-from ..utils.health_checks import check_langflow_connection, check_qdrant_connection, check_ollama_connection
 from typing import Dict, Any
 import os
 
-OLLAMA_URL = os.getenv("INTERNAL_OLLAMA_URL")
-QDRANT_URL = os.getenv("INTERNAL_QDRANT_URL")
+from ...services.health_service import HealthService
+
 HEALTH_BASE_ENDPOINT = os.getenv("HEALTH_BASE_ENDPOINT")
 HEALTH_OLLAMA_ENDPOINT = os.getenv("HEALTH_OLLAMA_ENDPOINT")
 HEALTH_QDRANT_ENDPOINT = os.getenv("HEALTH_QDRANT_ENDPOINT")
 HEALTH_LANGFLOW_ENDPOINT = os.getenv("HEALTH_LANGFLOW_ENDPOINT")
+HEALTH_CHECK_ENDPOINT = os.getenv("HEALTH_CHECK_ENDPOINT", "")
 
 router = APIRouter(prefix=HEALTH_BASE_ENDPOINT, tags=["health"])
+health_service = HealthService()
 
 
-@router.get("")
+@router.get(HEALTH_CHECK_ENDPOINT)
 async def health_check() -> Dict[str, Any]:
-    ollama_status = check_ollama_connection()
-    qdrant_status = check_qdrant_connection()
-    langflow_status = check_langflow_connection()
-
-    all_healthy = ollama_status and qdrant_status and langflow_status
-
-    return {
-        "status": "healthy" if all_healthy else "degraded",
-        "timestamp": datetime.utcnow().isoformat(),
-        "services": {
-            "ollama": "connected" if ollama_status else "disconnected",
-            "qdrant": "connected" if qdrant_status else "disconnected",
-            "langflow": "connected" if langflow_status else "disconnected",
-            "api": "running"
-        },
-        "version": "1.0.0"
-    }
+    """Get overall system health status"""
+    return await health_service.get_system_health()
 
 
 @router.get(HEALTH_OLLAMA_ENDPOINT)
 async def check_ollama() -> Dict[str, Any]:
     """Check if Ollama service is running"""
-    is_connected = check_ollama_connection()
-    if not is_connected:
-        raise HTTPException(status_code=503, detail="Ollama service is not available")
-    return {"status": "connected", "service": "ollama"}
+    status = await health_service.check_ollama_health()
+    if not status.is_healthy:
+        raise HTTPException(status_code=503, detail=status.error_message)
+    return status.to_dict()
 
 
 @router.get(HEALTH_QDRANT_ENDPOINT)
 async def check_qdrant() -> Dict[str, Any]:
     """Check if Qdrant service is running"""
-    is_connected = check_qdrant_connection()
-    if not is_connected:
-        raise HTTPException(status_code=503, detail="Qdrant service is not available")
-    return {"status": "connected", "service": "qdrant"}
+    status = await health_service.check_qdrant_health()
+    if not status.is_healthy:
+        raise HTTPException(status_code=503, detail=status.error_message)
+    return status.to_dict()
 
 
 @router.get(HEALTH_LANGFLOW_ENDPOINT)
 async def check_langflow() -> Dict[str, Any]:
     """Check if Langflow service is running"""
-    is_connected = check_langflow_connection()
-    if not is_connected:
-        raise HTTPException(status_code=503, detail="Langflow service is not available")
-    return {"status": "connected", "service": "langflow"}
+    status = await health_service.check_langflow_health()
+    if not status.is_healthy:
+        raise HTTPException(status_code=503, detail=status.error_message)
+    return status.to_dict()

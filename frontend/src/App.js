@@ -1,8 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Dashboard from './pages/Dashboard';
-import LoginRedirect from './components/LoginRedirect';
-import AuthGuard from './components/AuthGuard';
+import Dashboard from './pages/dashboard/Dashboard';
+import LoginRedirect from './pages/dashboard/components/LoginRedirect';
+import AuthGuard from './pages/dashboard/components/AuthGuard';
 import './App.css';
 
 class AuthErrorBoundary extends React.Component {

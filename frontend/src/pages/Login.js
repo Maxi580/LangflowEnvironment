@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import userService from '../services/UserService';
+import userService from '../requests/UserRequests';
 
 const LoginPage = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
@@ -77,11 +77,9 @@ const LoginPage = ({ onLoginSuccess }) => {
       if (result.success) {
         setMessage({ type: 'success', text: 'Login successful! Redirecting...' });
 
-        // Clear the form
         setUsername('');
         setPassword('');
 
-        // Immediate redirect - no delay
         if (onLoginSuccess) {
           onLoginSuccess(result.user);
         }
