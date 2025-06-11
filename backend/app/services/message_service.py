@@ -1,13 +1,17 @@
 import time
 import os
-from typing import Dict, Any, List
+import tempfile
+import uuid
+from pathlib import Path
+from typing import Dict, Any, List, Optional
 from datetime import datetime
-from fastapi import Request
+from fastapi import Request, UploadFile
 
 from ..services.flow_service import FlowService
-from ..repositories.langflow_repository import LangflowRepository
+from ..external.langflow_repository import LangflowRepository
 from ..models.message import MessageRequest, MessageResponse, SessionInfo, ChatSession
 from ..utils.jwt_helper import get_user_id_from_request, get_user_info_from_request
+from ..utils.file_embedding import read_file_content
 
 
 class MessageService:
@@ -16,6 +20,168 @@ class MessageService:
         self.langflow_repo = LangflowRepository()
         # Sessions organized by user_id for proper multi-user support
         self._active_sessions: Dict[str, Dict[str, ChatSession]] = {}
+
+    async def send_message_with_files(
+            self,
+            request: Request,
+            message_request: Optional[MessageRequest] = None,
+            message: Optional[str] = None,
+            flow_id: Optional[str] = None,
+            session_id: Optional[str] = None,
+            attached_files: List[UploadFile] = None,
+            include_images: bool = True
+    ) -> MessageResponse:
+        """
+        Send a message with optional file attachments
+        Handles both JSON requests (backward compatibility) and form data with files
+        """
+        if attached_files is None:
+            attached_files = []
+
+        final_message_request = self._prepare_message_request(
+            message_request, message, flow_id, session_id
+        )
+
+        enhanced_message = await self._process_attached_files(
+            final_message_request.message, attached_files, include_images
+        )
+
+        enhanced_message_request = MessageRequest(
+            message=enhanced_message,
+            flow_id=final_message_request.flow_id,
+            session_id=final_message_request.session_id
+        )
+
+        result = await self.send_message_to_flow(request, enhanced_message_request)
+
+        if attached_files:
+            file_info = self._get_file_processing_info(attached_files)
+            if result.raw_response is None:
+                result.raw_response = {}
+            result.raw_response.update(file_info)
+
+        return result
+
+    def _prepare_message_request(
+            self,
+            message_request: Optional[MessageRequest],
+            message: Optional[str],
+            flow_id: Optional[str],
+            session_id: Optional[str]
+    ) -> MessageRequest:
+        """Prepare the final message request from either JSON or form data"""
+        if message_request is not None:
+            # JSON request (backward compatibility)
+            return message_request
+        else:
+            # Form data request
+            if not message and not flow_id:
+                raise ValueError("Either message_request or form data (message, flow_id) must be provided")
+            if not flow_id:
+                raise ValueError("Flow ID is required")
+
+            return MessageRequest(
+                message=message or "",
+                flow_id=flow_id,
+                session_id=session_id
+            )
+
+    async def _process_attached_files(
+            self,
+            original_message: str,
+            attached_files: List[UploadFile],
+            include_images: bool = True
+    ) -> str:
+        """Process attached files and combine with original message"""
+        if not attached_files:
+            return original_message
+
+        print(f"Processing {len(attached_files)} attached files...")
+
+        file_contents = []
+        for file in attached_files:
+            if not file.filename:
+                continue
+
+            file_content = await self._process_single_file(file, include_images)
+            if file_content:
+                file_contents.append(file_content)
+
+        # Combine original message with file contents
+        enhanced_message = original_message.strip()
+
+        if file_contents:
+            if enhanced_message:
+                enhanced_message = f"{enhanced_message}\n\n=== ATTACHED FILES CONTENT ===\n" + "\n".join(file_contents)
+            else:
+                enhanced_message = f"Please analyze the following attached files:\n\n=== ATTACHED FILES CONTENT ===\n" + "\n".join(file_contents)
+
+        return enhanced_message
+
+    async def _process_single_file(
+            self,
+            file: UploadFile,
+            include_images: bool = True
+    ) -> str:
+        """Process a single uploaded file and return formatted content"""
+        try:
+            # Create temporary file
+            file_id = str(uuid.uuid4())
+            temp_dir = Path(tempfile.gettempdir()) / "message_uploads"
+            temp_dir.mkdir(exist_ok=True)
+            temp_file_path = temp_dir / f"{file_id}_{file.filename}"
+
+            # Save uploaded file temporarily
+            with open(temp_file_path, "wb") as temp_file:
+                content = await file.read()
+                temp_file.write(content)
+
+            try:
+                # Use existing file processing logic
+                file_content, file_type = read_file_content(
+                    str(temp_file_path),
+                    include_images=include_images
+                )
+
+                # Format file content with clear headers
+                file_header = f"\n\n--- FILE: {file.filename} (Type: {file_type}, Size: {len(content)} bytes) ---\n"
+                formatted_content = file_header + file_content
+
+                print(f"✅ Successfully processed file: {file.filename} ({file_type})")
+                return formatted_content
+
+            except Exception as e:
+                print(f"❌ Error processing file {file.filename}: {e}")
+                error_msg = f"Could not process file '{file.filename}': {str(e)}"
+                return f"\n\n--- FILE: {file.filename} (PROCESSING FAILED) ---\n{error_msg}\n"
+
+            finally:
+                # Clean up temporary file
+                try:
+                    temp_file_path.unlink(missing_ok=True)
+                except Exception as e:
+                    print(f"Warning: Could not delete temp file {temp_file_path}: {e}")
+
+        except Exception as e:
+            print(f"❌ Error handling file {file.filename}: {e}")
+            error_msg = f"Could not read file '{file.filename}': {str(e)}"
+            return f"\n\n--- FILE: {file.filename} (READ FAILED) ---\n{error_msg}\n"
+
+    def _get_file_processing_info(self, attached_files: List[UploadFile]) -> Dict[str, Any]:
+        """Get file processing information for response"""
+        processed_files_info = []
+        for file in attached_files:
+            if file.filename:
+                processed_files_info.append({
+                    "filename": file.filename,
+                    "size": file.size if hasattr(file, 'size') else 0,
+                    "content_type": file.content_type if hasattr(file, 'content_type') else "unknown"
+                })
+
+        return {
+            "processed_files": processed_files_info,
+            "files_processed_count": len(processed_files_info)
+        }
 
     async def send_message_to_flow(self, request: Request, message_request: MessageRequest) -> MessageResponse:
         """Send a message to a flow and return the response"""
@@ -178,9 +344,10 @@ class MessageService:
         if access_info.get("is_expired", True):
             raise ValueError("Authentication token has expired")
 
-        # Validate message content
+        # Validate message content (allow empty if files might be attached)
         if not message_request.message or not message_request.message.strip():
-            raise ValueError("Message cannot be empty")
+            # This is now allowed as files can provide content
+            pass
 
         # Validate flow ID
         if not message_request.flow_id:

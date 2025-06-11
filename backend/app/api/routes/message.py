@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, Request
-from typing import Dict, Any
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
+from typing import Dict, Any, List, Optional
 import os
 
 from ...services.message_service import MessageService
@@ -18,12 +18,25 @@ message_service = MessageService()
 @router.post(MESSAGES_SEND_ENDPOINT, response_model=MessageResponse)
 async def send_message(
         request: Request,
-        message_request: MessageRequest
+        message_request: Optional[MessageRequest] = None,
+        message: Optional[str] = Form(None),
+        flow_id: Optional[str] = Form(None),
+        session_id: Optional[str] = Form(None),
+        attached_files: List[UploadFile] = File(default=[]),
+        include_images: bool = Form(True)
 ) -> MessageResponse:
-    """Send a message to a flow and get response"""
     try:
-        result = await message_service.send_message_to_flow(request, message_request)
+        result = await message_service.send_message_with_files(
+            request=request,
+            message_request=message_request,
+            message=message,
+            flow_id=flow_id,
+            session_id=session_id,
+            attached_files=attached_files,
+            include_images=include_images
+        )
         return result
+
     except ValueError as e:
         error_msg = str(e)
         if "authentication" in error_msg.lower() or "token" in error_msg.lower():
@@ -36,7 +49,7 @@ async def send_message(
             raise HTTPException(status_code=403, detail=error_msg)
         else:
             raise HTTPException(status_code=400, detail=error_msg)
-    except TimeoutError as e:
+    except TimeoutError:
         raise HTTPException(status_code=504, detail="Request to Langflow timed out")
     except ConnectionError as e:
         raise HTTPException(status_code=503, detail=f"Could not connect to Langflow: {str(e)}")

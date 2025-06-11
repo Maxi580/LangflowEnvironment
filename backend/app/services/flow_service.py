@@ -8,9 +8,9 @@ import asyncio
 from fastapi import Request, UploadFile, BackgroundTasks
 from datetime import datetime
 
-from ..repositories.langflow_repository import LangflowRepository
-from ..repositories.qdrant_repository import QdrantRepository
-from ..repositories.ollama_repository import OllamaRepository
+from ..external.langflow_repository import LangflowRepository
+from ..external.qdrant_repository import QdrantRepository
+from ..external.ollama_repository import OllamaRepository
 from ..models.flow import (
     Flow, FlowDeletionResult, FlowExecutionResult,
     FlowComponentInfo, FlowUpload

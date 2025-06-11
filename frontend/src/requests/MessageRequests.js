@@ -1,7 +1,7 @@
 import config from '../config';
 import TokenRefreshService from './TokenRefreshRequests';
 
-// Helper functions (moved from MessageParser since we only need these)
+// Helper functions
 const generateSessionId = () => {
   const timestamp = Date.now();
   const randomString = Math.random().toString(36).substring(2, 8);
@@ -28,6 +28,71 @@ const createMessage = (text, sender, metadata = {}) => {
   };
 };
 
+const validateFiles = (files) => {
+  const maxFileSize = 10 * 1024 * 1024; // 10MB
+  const allowedTypes = [
+    'text/plain',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/json',
+    'text/csv',
+    'text/markdown',
+    'text/html',
+    'text/css',
+    'text/javascript',
+    'application/javascript',
+    'text/xml',
+    'application/xml',
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/bmp',
+    'image/tiff',
+    'image/webp'
+  ];
+
+  for (let file of files) {
+    // Check file size
+    if (file.size > maxFileSize) {
+      throw new Error(`File "${file.name}" exceeds maximum size of 10MB`);
+    }
+
+    // Check file type (if specified)
+    if (file.type && !allowedTypes.includes(file.type)) {
+      // Also check by extension for files without proper MIME types
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      const extensionMap = {
+        'txt': 'text/plain',
+        'pdf': 'application/pdf',
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'json': 'application/json',
+        'csv': 'text/csv',
+        'md': 'text/markdown',
+        'html': 'text/html',
+        'css': 'text/css',
+        'js': 'text/javascript',
+        'py': 'text/plain',
+        'xml': 'text/xml',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'bmp': 'image/bmp',
+        'tiff': 'image/tiff',
+        'webp': 'image/webp'
+      };
+
+      if (!extensionMap[extension]) {
+        throw new Error(`File type not supported: "${file.name}"`);
+      }
+    }
+  }
+};
+
 class MessageService {
   constructor() {
     this.BACKEND_BASE_URL = config.api.backendUrl;
@@ -38,51 +103,73 @@ class MessageService {
    * Sends a message via backend (server handles all API key management)
    * @param {string} message - The user message to send
    * @param {string} flowId - The ID of the flow to use
-   * @param {Array} files - Array of available files (optional)
+   * @param {Array} persistentFiles - Array of persistent collection files (optional)
    * @returns {Promise<Object>} - The bot response object
    */
-  async sendMessage(message, flowId, files = []) {
-    if (!message.trim()) {
-      throw new Error("Message cannot be empty");
+  async sendMessage(message, flowId, persistentFiles = []) {
+    return this.sendMessageWithFiles(message, flowId, persistentFiles, []);
+  }
+
+  /**
+   * Sends a message with attached files via backend
+   * @param {string} message - The user message to send
+   * @param {string} flowId - The ID of the flow to use
+   * @param {Array} persistentFiles - Array of persistent collection files (optional)
+   * @param {Array} attachedFiles - Array of File objects to attach to this message
+   * @returns {Promise<Object>} - The bot response object
+   */
+  async sendMessageWithFiles(message, flowId, persistentFiles = [], attachedFiles = []) {
+    if (!message.trim() && attachedFiles.length === 0) {
+      throw new Error("Message cannot be empty and no files attached");
     }
 
     if (!flowId) {
       throw new Error("Flow ID is required");
     }
 
-    try {
-      // Format message with file references if provided
-      const fileReferences = formatFileReferences(files);
-      const formattedMessage = fileReferences
-        ? `${message}\n\nAvailable files: ${fileReferences}`
-        : message;
+    // Validate attached files
+    if (attachedFiles.length > 0) {
+      validateFiles(attachedFiles);
+    }
 
+    try {
       // Generate session ID if not set
       const sessionId = this.getCurrentSessionId() || generateSessionId();
 
-      // Prepare payload for backend
-      const payload = {
-        message: formattedMessage,
-        flow_id: flowId,
-        session_id: sessionId
-      };
+      // Create FormData for multipart upload
+      const formData = new FormData();
 
-      console.log("Sending message via backend:", {
-        flowId,
-        sessionId,
-        hasFiles: files.length > 0
+      // Add basic message data
+      formData.append('message', message.trim() || '');
+      formData.append('flow_id', flowId);
+      formData.append('session_id', sessionId);
+
+      // Add persistent file references if available
+      if (persistentFiles.length > 0) {
+        const persistentFileReferences = formatFileReferences(persistentFiles);
+        formData.append('persistent_files_info', persistentFileReferences);
+      }
+
+      // Add attached files
+      attachedFiles.forEach((file, index) => {
+        formData.append(`attached_files`, file);
       });
 
-      // Send to backend (which handles all API key management)
+      console.log("Sending message with files via backend:", {
+        flowId,
+        sessionId,
+        messageLength: message.length,
+        attachedFilesCount: attachedFiles.length,
+        persistentFilesCount: persistentFiles.length
+      });
+
+      // Send to backend
       const response = await TokenRefreshService.authenticatedFetch(
         config.api.getMessagesSendUrl(),
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
           credentials: 'include',
-          body: JSON.stringify(payload)
+          body: formData // Don't set Content-Type header, let browser set it with boundary
         }
       );
 
@@ -103,15 +190,99 @@ class MessageService {
       // Update session ID from response
       this.setCurrentSessionId(responseData.session_id);
 
-      // Return formatted message object using helper
+      // Return formatted message object
       return createMessage(responseData.response, 'bot', {
         sessionId: responseData.session_id,
         rawResponse: responseData.raw_response,
-        flowId
+        flowId,
+        processedFiles: responseData.processed_files || []
       });
 
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('Error sending message with files:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Upload files directly to a message endpoint (alternative approach)
+   * @param {string} message - The user message
+   * @param {string} flowId - The ID of the flow to use
+   * @param {Array} files - Array of File objects
+   * @returns {Promise<Object>} - The response from the upload
+   */
+  async sendMessageWithDirectUpload(message, flowId, files = []) {
+    if (!flowId) {
+      throw new Error("Flow ID is required");
+    }
+
+    if (files.length === 0 && !message.trim()) {
+      throw new Error("Either message or files must be provided");
+    }
+
+    // Validate files
+    if (files.length > 0) {
+      validateFiles(files);
+    }
+
+    try {
+      const sessionId = this.getCurrentSessionId() || generateSessionId();
+
+      // Create FormData
+      const formData = new FormData();
+      formData.append('message', message || '');
+      formData.append('flow_id', flowId);
+      formData.append('session_id', sessionId);
+
+      // Add processing options
+      formData.append('chunk_size', '1000');
+      formData.append('chunk_overlap', '200');
+      formData.append('include_images', 'true');
+
+      // Add files
+      files.forEach((file) => {
+        formData.append('files', file);
+      });
+
+      console.log("Sending direct upload message:", {
+        flowId,
+        sessionId,
+        filesCount: files.length
+      });
+
+      // Send to a dedicated endpoint for direct file processing
+      const response = await TokenRefreshService.authenticatedFetch(
+        `${this.BACKEND_BASE_URL}/api/messages/send-with-upload`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          body: formData
+        }
+      );
+
+      if (!response.ok) {
+        let errorMessage;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || `Upload failed: ${response.status}`;
+        } catch (parseError) {
+          errorMessage = `Upload failed: ${response.status} ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const responseData = await response.json();
+      this.setCurrentSessionId(responseData.session_id);
+
+      return createMessage(responseData.response, 'bot', {
+        sessionId: responseData.session_id,
+        rawResponse: responseData.raw_response,
+        flowId,
+        uploadedFiles: responseData.uploaded_files || []
+      });
+
+    } catch (error) {
+      console.error('Error in direct upload:', error);
       throw error;
     }
   }
@@ -122,16 +293,12 @@ class MessageService {
    */
   async clearSession() {
     try {
-      // Generate new session ID
       const newSessionId = generateSessionId();
       this.setCurrentSessionId(newSessionId);
-
       console.log("Session cleared - new session:", newSessionId);
       return newSessionId;
-
     } catch (error) {
       console.warn('Error during session clear:', error);
-      // Fallback to local clear
       this.currentSessionId = null;
       console.log("Session cleared locally");
       return null;
@@ -165,14 +332,13 @@ class MessageService {
   }
 
   /**
-   * Cleanup any persistent API keys (if using the API key endpoints)
+   * Cleanup any persistent API keys
    * @returns {Promise<boolean>} - Success status
    */
   async cleanup() {
     try {
       console.log("Cleaning up any persistent API keys...");
 
-      // Use the API key cleanup endpoint to remove any persistent keys
       const response = await TokenRefreshService.authenticatedFetch(
         `${this.BACKEND_BASE_URL}/api/api-keys`,
         {
@@ -189,14 +355,12 @@ class MessageService {
         return true;
       } else {
         console.warn("Cleanup request failed:", response.status);
-        // Still clear local state on failure
         this.currentSessionId = null;
         return false;
       }
 
     } catch (error) {
       console.error('Error during cleanup:', error);
-      // Still clear local state
       this.currentSessionId = null;
       return false;
     }
@@ -224,16 +388,17 @@ class MessageService {
   }
 
   /**
-   * Creates a user message object using helper
+   * Creates a user message object
    * @param {string} text - User message text
+   * @param {Object} metadata - Additional metadata (e.g., attached files info)
    * @returns {Object} - User message object
    */
-  createUserMessage(text) {
-    return createMessage(text, 'user');
+  createUserMessage(text, metadata = {}) {
+    return createMessage(text, 'user', metadata);
   }
 
   /**
-   * Creates a system message object using helper
+   * Creates a system message object
    * @param {string} text - System message text
    * @returns {Object} - System message object
    */
@@ -242,7 +407,7 @@ class MessageService {
   }
 
   /**
-   * Creates an error message object using helper
+   * Creates an error message object
    * @param {string} text - Error message text
    * @returns {Object} - Error message object
    */
@@ -265,6 +430,61 @@ class MessageService {
   setCurrentSessionId(sessionId) {
     this.currentSessionId = sessionId;
     console.log("Session ID set to:", sessionId);
+  }
+
+  /**
+   * Utility method to get file info for display
+   * @param {File} file - File object
+   * @returns {Object} - File information object
+   */
+  getFileInfo(file) {
+    return {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      lastModified: file.lastModified,
+      formattedSize: this.formatFileSize(file.size)
+    };
+  }
+
+  /**
+   * Format file size in human readable format
+   * @param {number} bytes - File size in bytes
+   * @returns {string} - Formatted file size
+   */
+  formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  /**
+   * Check if file type is supported
+   * @param {File} file - File to check
+   * @returns {boolean} - True if supported
+   */
+  isFileTypeSupported(file) {
+    try {
+      validateFiles([file]);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Get supported file extensions
+   * @returns {Array} - Array of supported extensions
+   */
+  getSupportedExtensions() {
+    return [
+      '.txt', '.pdf', '.docx', '.xlsx', '.pptx',
+      '.md', '.json', '.csv', '.py', '.js',
+      '.html', '.css', '.xml', '.jpg', '.jpeg',
+      '.png', '.gif', '.bmp', '.tiff', '.webp'
+    ];
   }
 }
 

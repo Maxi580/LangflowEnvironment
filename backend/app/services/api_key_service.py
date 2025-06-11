@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from ..repositories.langflow_repository import LangflowRepository
+from ..external.langflow_repository import LangflowRepository
 
 
 class ApiKeyService:

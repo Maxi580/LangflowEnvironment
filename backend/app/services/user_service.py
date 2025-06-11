@@ -4,7 +4,7 @@ import jwt
 from typing import Optional
 from fastapi import Request, Response
 
-from ..repositories.langflow_repository import LangflowRepository
+from ..external.langflow_repository import LangflowRepository
 from ..services.flow_service import FlowService
 from ..models.user import (
     UserCreate, UserDeletionResult
@@ -92,7 +92,6 @@ class UserService:
     async def login_user(self, user_data: UserCreate, request: Request, response: Response) -> UserDeletionResult:
         """Authenticate user and set cookies"""
         try:
-            # Authenticate with Langflow
             token_data = await self.langflow_repo.authenticate_user(
                 user_data.username, user_data.password
             )
@@ -103,7 +102,6 @@ class UserService:
             if not access_token:
                 raise ValueError("Invalid credentials")
 
-            # Parse token information
             user_info = jwt.decode(access_token, options={"verify_signature": False})
             user_id = user_info.get("sub") or user_info.get("user_id")
             token_expiry = user_info.get("exp", 0)
@@ -111,7 +109,6 @@ class UserService:
             current_time = int(time.time())
             access_token_max_age = max(0, token_expiry - current_time)
 
-            # Handle refresh token
             refresh_token_max_age = 86400  # Default 24 hours
             if refresh_token:
                 try:
@@ -122,7 +119,6 @@ class UserService:
                 except Exception:
                     pass
 
-            # Set cookies
             self._set_auth_cookies(
                 response, request, user_data.username, access_token,
                 refresh_token, access_token_max_age, refresh_token_max_age

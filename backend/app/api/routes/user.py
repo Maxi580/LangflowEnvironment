@@ -35,7 +35,6 @@ async def login(user: UserCreate, request: Request, response: Response) -> Dict[
         result = await user_service.login_user(user, request, response)
         return result.dict()
     except ValueError as e:
-        # Business logic errors (invalid credentials, etc.)
         return {"success": False, "message": str(e)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
@@ -79,7 +78,7 @@ async def get_auth_status(request: Request) -> Dict[str, Any]:
     """Get detailed authentication status"""
     try:
         result = await user_service.get_auth_status(request)
-        return result.dict()
+        return result
     except Exception as e:
         return {
             "authenticated": False,

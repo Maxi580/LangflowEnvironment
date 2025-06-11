@@ -1,8 +1,8 @@
 from datetime import datetime
 from typing import Dict, Any
-from ..repositories.ollama_repository import OllamaRepository
-from ..repositories.qdrant_repository import QdrantRepository
-from ..repositories.langflow_repository import LangflowRepository
+from ..external.ollama_repository import OllamaRepository
+from ..external.qdrant_repository import QdrantRepository
+from ..external.langflow_repository import LangflowRepository
 from ..models.health import ServiceHealthStatus, SystemHealthStatus
 
 
