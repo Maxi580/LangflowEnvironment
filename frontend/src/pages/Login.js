@@ -83,9 +83,13 @@ const LoginPage = ({ onLoginSuccess }) => {
         if (onLoginSuccess) {
           onLoginSuccess(result.user);
         }
+      } else {
+        setMessage({
+          type: 'error',
+          text: 'Login failed. Please check your credentials and try again.'
+        });
       }
     } catch (error) {
-      console.error('Login error:', error);
       setMessage({
         type: 'error',
         text: error.message || 'Login failed. Please check your credentials and try again.'
@@ -115,7 +119,6 @@ const LoginPage = ({ onLoginSuccess }) => {
       if (result.success) {
         setMessage({ type: 'success', text: 'Registration successful! Logging you in...' });
 
-        // Auto-login after successful registration
         try {
           const loginResult = await userService.login({ username, password });
 
@@ -125,12 +128,10 @@ const LoginPage = ({ onLoginSuccess }) => {
 
             setMessage({ type: 'success', text: 'Registration and login successful! Redirecting...' });
 
-            // Immediate redirect - no delay
             if (onLoginSuccess) {
               onLoginSuccess(loginResult.user);
             }
           } else {
-            // Registration successful but auto-login failed
             setPassword('');
             setMessage({
               type: 'success',
@@ -148,10 +149,9 @@ const LoginPage = ({ onLoginSuccess }) => {
       } else {
         setMessage({
           type: 'error',
-          text: result.message || 'Registration failed'
+          text: result.message || 'Registration failed. Please try again.'
         });
       }
-
     } catch (error) {
       console.error('Registration error:', error);
       setMessage({
@@ -162,6 +162,7 @@ const LoginPage = ({ onLoginSuccess }) => {
       setIsLoading(false);
     }
   };
+
 
   const clearMessage = () => {
     setMessage({ type: '', text: '' });

@@ -25,24 +25,37 @@ class UserRequests {
         })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || errorData.detail || `Login failed: ${response.status} ${response.statusText}`);
-      }
-
       const responseData = await response.json();
 
+      if (!response.ok) {
+        return {
+          success: false,
+          message: 'Invalid username or password',
+          error: responseData.message || responseData.detail || `${response.status} ${response.statusText}`
+        };
+      }
+
       if (!responseData.success) {
-        throw new Error(responseData.message || 'Login failed');
+        return {
+          success: false,
+          message: 'Invalid username or password',
+          error: responseData.message || 'Login failed'
+        };
       }
 
       return {
         success: true,
-        message: responseData.message || 'Login successful'
+        message: responseData.message || 'Login successful',
+        user: responseData.user || { username: credentials.username }
       };
 
     } catch (error) {
-      throw new Error(`Login failed: ${error.message}`);
+      console.error('Network error during login:', error);
+      return {
+        success: false,
+        message: 'Network error. Please try again.',
+        error: error.message
+      };
     }
   }
 
@@ -71,6 +84,7 @@ class UserRequests {
 
       if (!response.ok || responseData.success === false) {
         let errorMessage = 'Registration failed';
+
         if (responseData.message) {
           try {
             const nestedError = JSON.parse(responseData.message.replace('Failed to create user: ', ''));
@@ -81,16 +95,27 @@ class UserRequests {
         } else if (responseData.detail) {
           errorMessage = responseData.detail;
         }
-        throw new Error(errorMessage);
+
+        return {
+          success: false,
+          message: errorMessage,
+          error: responseData.message || responseData.detail
+        };
       }
 
-      return responseData;
+      return {
+        success: true,
+        message: responseData.message || 'Registration successful',
+        user: responseData.user
+      };
 
     } catch (error) {
-      if (error.message && !error.message.includes('fetch')) {
-        throw error;
-      }
-      throw new Error(`Registration failed: ${error.message}`);
+      console.error('Network error during registration:', error);
+      return {
+        success: false,
+        message: 'Network error. Please try again.',
+        error: error.message
+      };
     }
   }
 
