@@ -22,30 +22,6 @@ OLLAMA_GENERATE_ENDPOINT = os.getenv("OLLAMA_GENERATE_ENDPOINT")
 OLLAMA_TAGS_ENDPOINT = os.getenv("OLLAMA_TAGS_ENDPOINT")
 
 
-@lru_cache(maxsize=5)
-def get_vector_size(model_name: Optional[str] = None) -> int:
-    """
-    Get vector size for embedding model with caching
-    Only embeds sample text once per model
-
-    Args:
-        model_name: Name of the model (defaults to DEFAULT_EMBEDDING_MODEL)
-
-    Returns:
-        Vector size for the model
-    """
-    if model_name is None:
-        model_name = DEFAULT_EMBEDDING_MODEL
-
-    print(f"Getting vector size for model: {model_name}")
-
-    sample_embedding = get_text_embedding("Sample text for dimension detection")
-    vector_size = len(sample_embedding)
-
-    print(f"Vector size for model '{model_name}': {vector_size}")
-    return vector_size
-
-
 def get_text_embedding(text: str) -> List[float]:
     """
     Get text embedding using the configured embedding model
@@ -194,96 +170,6 @@ def get_image_description(image_path: str, prompt: str = None) -> str:
         raise ValueError(f"Unexpected error getting image description from model {model}: {str(e)}")
 
 
-def test_embedding_model() -> Dict[str, Any]:
-    """
-    Test the configured embedding model
-
-    Returns:
-        Dictionary with test results including model info, performance metrics
-    """
-    try:
-        model = DEFAULT_EMBEDDING_MODEL
-        test_text = "This is a test sentence for embedding dimension detection."
-
-        start_time = time.time()
-        embedding = get_text_embedding(test_text)
-        response_time = time.time() - start_time
-
-        return {
-            "success": True,
-            "model_name": model,
-            "vector_size": len(embedding),
-            "response_time_seconds": round(response_time, 3),
-            "sample_values": embedding[:5] if len(embedding) >= 5 else embedding,
-            "test_text": test_text
-        }
-
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "vector_size": None,
-            "model_name": DEFAULT_EMBEDDING_MODEL
-        }
-
-
-def test_vision_model() -> Dict[str, Any]:
-    """
-    Test if the configured vision model is available
-
-    Returns:
-        Dictionary with test results
-    """
-    model = DEFAULT_VISION_MODEL
-
-    try:
-        url = f"{OLLAMA_URL}{OLLAMA_TAGS_ENDPOINT}"
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-
-        data = response.json()
-        available_models = [model["name"] for model in data.get("models", [])]
-
-        is_available = model in available_models
-
-        return {
-            "success": is_available,
-            "model_name": model,
-            "available": is_available,
-            "message": f"Vision model '{model}' is {'available' if is_available else 'not available'}"
-        }
-
-    except Exception as e:
-        return {
-            "success": False,
-            "model_name": model,
-            "available": False,
-            "error": str(e)
-        }
-
-
-def get_embedding_info() -> Dict[str, Any]:
-    """
-    Get information about current embedding configuration
-
-    Returns:
-        Dictionary with current model configuration and capabilities
-    """
-    return {
-        "embedding_model": DEFAULT_EMBEDDING_MODEL,
-        "vision_model": DEFAULT_VISION_MODEL,
-        "ollama_url": OLLAMA_URL,
-        "embedding_endpoint": OLLAMA_EMBEDDINGS_ENDPOINT,
-        "vision_endpoint": OLLAMA_GENERATE_ENDPOINT,
-        "vector_size": get_vector_size()
-    }
-
-
-def clear_vector_cache():
-    get_vector_size.cache_clear()
-    print("Vector size cache cleared")
-
-
 def get_available_models() -> Dict[str, List[str]]:
     """Get all available models from Ollama and categorize them"""
     try:
@@ -322,32 +208,6 @@ def get_available_models() -> Dict[str, List[str]]:
             "chat": [],
             "all": []
         }
-
-
-def get_best_embedding_model() -> str:
-    configured_model = os.getenv("DEFAULT_EMBEDDING_MODEL", "nomic-embed-text")
-
-    available = get_available_models()
-    if configured_model in available["all"]:
-        return configured_model
-
-    if available["embedding"]:
-        return available["embedding"][0]
-
-    return "nomic-embed-text"
-
-
-def get_best_vision_model() -> str:
-    configured_model = os.getenv("DEFAULT_VISION_MODEL", "llava:7b")
-
-    available = get_available_models()
-    if configured_model in available["all"]:
-        return configured_model
-
-    if available["vision"]:
-        return available["vision"][0]
-
-    return "llava:7b"
 
 
 def get_ollama_image_description_from_bytes(image_data: bytes) -> str:

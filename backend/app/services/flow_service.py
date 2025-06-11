@@ -341,12 +341,10 @@ class FlowService:
         if not flow_id.strip():
             raise ValueError("Flow ID cannot be empty")
 
-        # Validate user has access to this flow
         has_access = await self.validate_user_flow_access(request, flow_id)
         if not has_access:
             raise ValueError(f"Access denied: You don't have permission to access flow '{flow_id}'")
 
-        # Check if collection already exists
         if await self.qdrant_repo.collection_exists(flow_id):
             collection_info = await self.qdrant_repo.get_collection_info(flow_id)
             return CollectionCreateResponse(
@@ -356,10 +354,8 @@ class FlowService:
                 created=False
             )
 
-        # Get vector size from embedding model
         vector_size = await self.ollama_repo.get_vector_size()
 
-        # Create the collection
         collection_info = await self.qdrant_repo.create_collection(flow_id, vector_size)
 
         return CollectionCreateResponse(
@@ -382,16 +378,13 @@ class FlowService:
         if not flow_id.strip():
             raise ValueError("Flow ID cannot be empty")
 
-        # Validate user has access to this flow
         has_access = await self.validate_user_flow_access(request, flow_id)
         if not has_access:
             raise ValueError(f"Access denied: You don't have permission to access flow '{flow_id}'")
 
-        # Check if collection exists
         if not await self.qdrant_repo.collection_exists(flow_id):
             raise ValueError(f"Collection for flow '{flow_id}' not found")
 
-        # Delete the collection
         success = await self.qdrant_repo.delete_collection(flow_id)
 
         if not success:

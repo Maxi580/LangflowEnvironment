@@ -129,14 +129,3 @@ class RedirectService:
                 value=config.refresh_token,
                 **refresh_cookie_config
             )
-
-    def get_langflow_url(self) -> str:
-        """Get the configured Langflow URL"""
-        return self.langflow_url
-
-    async def validate_redirect_permissions(self, request: Request) -> bool:
-        """Validate if user has permission to redirect to Langflow"""
-        # Could add additional permission checks here if needed
-        # For now, anyone with valid tokens can redirect
-        access_token, _ = get_user_tokens(request)
-        return access_token is not None

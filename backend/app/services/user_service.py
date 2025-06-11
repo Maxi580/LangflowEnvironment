@@ -1,10 +1,11 @@
 import os
 import time
 import jwt
-from typing import Optional
+from typing import Optional, Dict, Any
 from fastapi import Request, Response
 
 from ..external.langflow_repository import LangflowRepository
+from ..external.qdrant_repository import QdrantRepository
 from ..services.flow_service import FlowService
 from ..models.user import (
     UserCreate, UserDeletionResult
@@ -21,12 +22,12 @@ USERNAME_COOKIE_NAME = os.getenv("USERNAME_COOKIE_NAME")
 
 class UserService:
     def __init__(self):
+        self.qdrant_repo = QdrantRepository()
         self.langflow_repo = LangflowRepository()
         self.flow_service = FlowService()
-        # Removed: self.collection_service = CollectionService()
         self._admin_token_cache = {"token": None, "expiry": 0}
 
-    async def _get_admin_token(self) -> str:
+    async def _get_admin_token(self) -> Optional[str]:
         """Get cached admin token or create new one"""
         current_time = time.time()
 
@@ -34,7 +35,6 @@ class UserService:
                 self._admin_token_cache["expiry"] > current_time + TOKEN_EXPIRY_BUFFER):
             return self._admin_token_cache["token"]
 
-        # Get new admin token
         token_data = await self.langflow_repo.authenticate_user(
             SUPERUSER_USERNAME, SUPERUSER_PASSWORD
         )
@@ -55,7 +55,6 @@ class UserService:
         try:
             admin_token = await self._get_admin_token()
 
-            # Create user
             user_response = await self.langflow_repo.create_user(user_data, admin_token)
             user_id = user_response.get("id")
 
@@ -66,7 +65,6 @@ class UserService:
                     message="User created but ID not found in response"
                 )
 
-            # Activate user
             activation_success = await self.langflow_repo.activate_user(user_id, admin_token)
 
             if not activation_success:
@@ -86,7 +84,7 @@ class UserService:
             return UserDeletionResult(
                 success=False,
                 user_id="",
-                message=f"Failed to create user: {str(e)}"
+                message=f"{str(e)}"
             )
 
     async def login_user(self, user_data: UserCreate, request: Request, response: Response) -> UserDeletionResult:
@@ -131,7 +129,7 @@ class UserService:
             )
 
         except Exception as e:
-            raise ValueError(f"Authentication failed: {str(e)}")
+            raise ValueError(f"{str(e)}")
 
     async def refresh_user_token(self, request: Request, response: Response) -> UserDeletionResult:
         """Refresh user access token"""
@@ -303,10 +301,8 @@ class UserService:
 
             admin_token = await self._get_admin_token()
 
-            # Clean up user's flows and collections
-            cleanup_results = await self._cleanup_user_flows_and_collections(user_token)
+            cleanup_results = await self._cleanup_user_data_remains(user_token)
 
-            # Delete user from Langflow
             deletion_success = await self.langflow_repo.delete_user(user_id, admin_token)
 
             if not deletion_success:
@@ -331,39 +327,66 @@ class UserService:
                 message=f"Error deleting user: {str(e)}"
             )
 
-    async def _cleanup_user_flows_and_collections(self, user_token: str) -> dict:
-        """Clean up user's flows and collections"""
+    async def _cleanup_user_data_remains(self, user_token: str) -> Dict[str, Any]:
+        """Clean up user's flows and their associated collections"""
         cleanup_results = {
             "flows_found": 0,
+            "flows_deleted": 0,
             "collections_deleted": 0,
             "deleted_collections": [],
+            "deleted_flows": [],
             "cleanup_errors": []
         }
 
         try:
-            # Get user's flows
-            user_flows = await self.flow_service.get_user_flows(user_token)
+            user_flows = await self.langflow_repo.get_flows(
+                token=user_token,
+                remove_example_flows=True,
+                header_flows=False,
+                get_all=True
+            )
+
             cleanup_results["flows_found"] = len(user_flows)
 
             if user_flows:
                 flow_ids = [flow.get('id') for flow in user_flows if flow.get('id')]
 
-                if flow_ids:
-                    # Use flow_service's internal collection deletion method
-                    deletion_results = await self.flow_service._delete_multiple_collections_internal(flow_ids)
+                for flow_id in flow_ids:
+                    try:
+                        await self.langflow_repo.delete_flow(flow_id, user_token)
+                        cleanup_results["flows_deleted"] += 1
+                        cleanup_results["deleted_flows"].append(flow_id)
+                        print(f"Deleted flow: {flow_id}")
 
-                    cleanup_results["collections_deleted"] = deletion_results.get("success_count", 0)
-                    cleanup_results["deleted_collections"] = deletion_results.get("successful_deletions", [])
+                        try:
+                            if await self.qdrant_repo.collection_exists(flow_id):
+                                collection_success = await self.qdrant_repo.delete_collection(flow_id)
+                                if collection_success:
+                                    cleanup_results["collections_deleted"] += 1
+                                    cleanup_results["deleted_collections"].append(flow_id)
+                                    print(f"Deleted collection for flow: {flow_id}")
+                                else:
+                                    error_msg = f"Failed to delete collection for flow {flow_id}"
+                                    cleanup_results["cleanup_errors"].append(error_msg)
+                                    print(f"Warning: {error_msg}")
+                            else:
+                                print(f"Collection for flow {flow_id} does not exist")
+                        except Exception as e:
+                            error_msg = f"Error deleting collection for flow {flow_id}: {str(e)}"
+                            cleanup_results["cleanup_errors"].append(error_msg)
+                            print(f"Warning: {error_msg}")
 
-                    if deletion_results.get("failed_deletions"):
-                        cleanup_results["cleanup_errors"].extend([
-                            failure["message"] for failure in deletion_results["failed_deletions"]
-                        ])
+                    except Exception as e:
+                        error_msg = f"Error deleting flow {flow_id}: {str(e)}"
+                        cleanup_results["cleanup_errors"].append(error_msg)
+                        print(f"Error: {error_msg}")
 
             return cleanup_results
 
         except Exception as e:
-            cleanup_results["cleanup_errors"].append(f"Error during cleanup: {str(e)}")
+            error_msg = f"Error during user cleanup: {str(e)}"
+            cleanup_results["cleanup_errors"].append(error_msg)
+            print(f"Error: {error_msg}")
             return cleanup_results
 
     def _set_auth_cookies(self, response: Response, request: Request, username: str,

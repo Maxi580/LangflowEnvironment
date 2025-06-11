@@ -18,7 +18,6 @@ class MessageService:
     def __init__(self):
         self.flow_service = FlowService()
         self.langflow_repo = LangflowRepository()
-        # Sessions organized by user_id for proper multi-user support
         self._active_sessions: Dict[str, Dict[str, ChatSession]] = {}
 
     async def send_message_with_files(
@@ -125,25 +124,21 @@ class MessageService:
     ) -> str:
         """Process a single uploaded file and return formatted content"""
         try:
-            # Create temporary file
             file_id = str(uuid.uuid4())
             temp_dir = Path(tempfile.gettempdir()) / "message_uploads"
             temp_dir.mkdir(exist_ok=True)
             temp_file_path = temp_dir / f"{file_id}_{file.filename}"
 
-            # Save uploaded file temporarily
             with open(temp_file_path, "wb") as temp_file:
                 content = await file.read()
                 temp_file.write(content)
 
             try:
-                # Use existing file processing logic
                 file_content, file_type = read_file_content(
                     str(temp_file_path),
                     include_images=include_images
                 )
 
-                # Format file content with clear headers
                 file_header = f"\n\n--- FILE: {file.filename} (Type: {file_type}, Size: {len(content)} bytes) ---\n"
                 formatted_content = file_header + file_content
 
@@ -156,7 +151,6 @@ class MessageService:
                 return f"\n\n--- FILE: {file.filename} (PROCESSING FAILED) ---\n{error_msg}\n"
 
             finally:
-                # Clean up temporary file
                 try:
                     temp_file_path.unlink(missing_ok=True)
                 except Exception as e:
@@ -339,21 +333,16 @@ class MessageService:
         if not user_info or not user_info.get("user_id"):
             raise ValueError("No valid authentication token found")
 
-        # Check if token is not expired
         access_info = user_info.get("access_token_info", {})
         if access_info.get("is_expired", True):
             raise ValueError("Authentication token has expired")
 
-        # Validate message content (allow empty if files might be attached)
         if not message_request.message or not message_request.message.strip():
-            # This is now allowed as files can provide content
             pass
 
-        # Validate flow ID
         if not message_request.flow_id:
             raise ValueError("Flow ID is required")
 
-        # Verify user has access to the flow
         has_access = await self.flow_service.validate_user_flow_access(request, message_request.flow_id)
         if not has_access:
             raise ValueError(f"Access denied: You don't have permission to use flow '{message_request.flow_id}'")
@@ -391,60 +380,3 @@ class MessageService:
             user_sessions[session_id] = session
             print(f"Created new session {session_id} for user {user_id} with flow {flow_id}")
 
-    async def cleanup_expired_sessions(self, max_age_hours: int = 24) -> Dict[str, int]:
-        """Clean up old/expired sessions for all users"""
-        cutoff_time = datetime.utcnow().timestamp() - (max_age_hours * 3600)
-        cleanup_stats = {
-            "total_expired_sessions": 0,
-            "users_affected": 0,
-            "empty_users_removed": 0
-        }
-
-        users_to_remove = []
-
-        for user_id, user_sessions in self._active_sessions.items():
-            expired_sessions = []
-
-            for session_id, session in user_sessions.items():
-                last_activity = session.last_message_at or session.created_at
-                if last_activity and last_activity.timestamp() < cutoff_time:
-                    expired_sessions.append(session_id)
-
-            # Remove expired sessions for this user
-            for session_id in expired_sessions:
-                del user_sessions[session_id]
-                cleanup_stats["total_expired_sessions"] += 1
-
-            if expired_sessions:
-                cleanup_stats["users_affected"] += 1
-                print(f"Cleaned up {len(expired_sessions)} expired sessions for user {user_id}")
-
-            # Mark users with no sessions for removal
-            if not user_sessions:
-                users_to_remove.append(user_id)
-
-        # Remove users with no active sessions
-        for user_id in users_to_remove:
-            del self._active_sessions[user_id]
-            cleanup_stats["empty_users_removed"] += 1
-
-        print(f"Session cleanup completed: {cleanup_stats}")
-        return cleanup_stats
-
-    async def get_session_stats(self) -> Dict[str, Any]:
-        """Get statistics about current sessions"""
-        total_sessions = 0
-        total_users = len(self._active_sessions)
-        sessions_by_status = {"active": 0, "ended": 0}
-
-        for user_sessions in self._active_sessions.values():
-            total_sessions += len(user_sessions)
-            for session in user_sessions.values():
-                sessions_by_status[session.status] = sessions_by_status.get(session.status, 0) + 1
-
-        return {
-            "total_users_with_sessions": total_users,
-            "total_sessions": total_sessions,
-            "sessions_by_status": sessions_by_status,
-            "average_sessions_per_user": round(total_sessions / total_users, 2) if total_users > 0 else 0
-        }

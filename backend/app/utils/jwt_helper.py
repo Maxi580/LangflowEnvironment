@@ -215,30 +215,3 @@ def get_user_info_from_request(request: Request) -> Optional[Dict[str, Any]]:
             result["refresh_token_info"] = refresh_info
 
     return result
-
-
-def is_token_valid(token: str, min_time_remaining: int = 0) -> bool:
-    """
-    Check if a token is valid and not expired
-
-    Args:
-        token: JWT token string
-        min_time_remaining: Minimum seconds that must remain before expiry
-
-    Returns:
-        True if token is valid and has enough time remaining
-    """
-    try:
-        decoded = jwt.decode(token, options={"verify_signature": False})
-
-        if not decoded.get("sub") or not decoded.get("exp"):
-            return False
-
-        current_time = int(time.time())
-        exp_time = decoded.get("exp", 0)
-        time_remaining = exp_time - current_time
-
-        return time_remaining > min_time_remaining
-
-    except Exception:
-        return False

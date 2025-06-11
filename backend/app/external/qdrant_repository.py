@@ -58,24 +58,6 @@ class QdrantRepository:
         except Exception:
             return False
 
-    async def get_collections(self) -> List[CollectionInfo]:
-        """Get all collections"""
-        try:
-            collections = self.client.get_collections().collections
-            return [
-                CollectionInfo(
-                    name=c.name,
-                    vectors_count=0,
-                    points_count=0,
-                    status="unknown",
-                    vector_size=0,
-                    distance="unknown"
-                )
-                for c in collections
-            ]
-        except Exception as e:
-            raise Exception(f"Failed to get collections: {str(e)}")
-
     async def collection_exists(self, collection_name: str) -> bool:
         """Check if collection exists"""
         try:
@@ -102,7 +84,6 @@ class QdrantRepository:
         except Exception as e:
             raise Exception(f"Failed to get collection info: {str(e)}")
 
-    # Document Management
     async def upload_documents(self, collection_name: str, chunks: List[DocumentChunk]) -> bool:
         """Upload document chunks to collection"""
         try:
@@ -211,25 +192,3 @@ class QdrantRepository:
             return list(file_info_by_path.values())
         except Exception as e:
             raise Exception(f"Failed to get files in collection: {str(e)}")
-
-    async def search_documents(self, collection_name: str, query_vector: List[float],
-                               limit: int = 10) -> List[Dict[str, Any]]:
-        """Search for similar documents"""
-        try:
-            results = self.client.search(
-                collection_name=collection_name,
-                query_vector=query_vector,
-                limit=limit
-            )
-
-            return [
-                {
-                    "id": result.id,
-                    "score": result.score,
-                    "content": result.payload.get("page_content", ""),
-                    "metadata": result.payload.get("metadata", {})
-                }
-                for result in results
-            ]
-        except Exception as e:
-            raise Exception(f"Failed to search documents: {str(e)}")

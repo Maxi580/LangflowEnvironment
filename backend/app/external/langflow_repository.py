@@ -183,20 +183,6 @@ class LangflowRepository:
         except:
             return {"success": True, "message": "Flow deleted successfully", "flow_id": flow_id}
 
-    async def delete_multiple_flows(self, flow_ids: List[str], token: str) -> Dict[str, Any]:
-        url = f"{self.base_url}{self.flows_endpoint}"
-        headers = {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {token}'
-        }
-
-        response = requests.delete(url, headers=headers, json=flow_ids)
-        if not response.ok:
-            raise Exception(f"Bulk flow deletion failed: {response.text}")
-
-        return response.json()
-
     async def run_flow(self, flow_id: str, payload: Dict[str, Any], api_key: str) -> LangflowMessageResponse:
         url = f"{self.base_url}{self.run_flow_endpoint.format(flow_id=flow_id)}"
         headers = {

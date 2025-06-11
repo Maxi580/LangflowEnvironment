@@ -16,7 +16,8 @@ class OllamaRepository:
         self.default_embedding_model = os.getenv("DEFAULT_EMBEDDING_MODEL", "nomic-embed-text")
         self.default_vision_model = os.getenv("DEFAULT_VISION_MODEL", "llava:7b")
 
-    # Health Check
+        self._vector_size_cache = {}
+
     async def check_connection(self) -> bool:
         """Check if Ollama service is reachable"""
         try:
@@ -107,14 +108,20 @@ class OllamaRepository:
         except Exception as e:
             raise Exception(f"Embedding processing error: {str(e)}")
 
-    @lru_cache(maxsize=3)
     async def get_vector_size(self, model: Optional[str] = None) -> int:
         """Get vector size for embedding model"""
         if model is None:
             model = self.default_embedding_model
 
+        if model in self._vector_size_cache:
+            return self._vector_size_cache[model]
+
         sample_response = await self.get_text_embedding("Sample text for dimension detection", model)
-        return len(sample_response.embedding)
+        vector_size = len(sample_response.embedding)
+
+        self._vector_size_cache[model] = vector_size
+
+        return vector_size
 
     async def describe_image(self, image_data: bytes, prompt: Optional[str] = None,
                              model: Optional[str] = None) -> str:

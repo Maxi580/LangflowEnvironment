@@ -45,23 +45,6 @@ class ApiKeyService:
         except Exception as e:
             raise Exception(f"Failed to create temporary API key: {str(e)}")
 
-    async def cleanup_temporary_api_key(self) -> bool:
-        """Clean up the current temporary API key"""
-        if not self._current_api_key_id:
-            return True
-
-        try:
-            # We need the auth token to delete, but we don't have it here
-            # This is a limitation - we'll need to pass it or store it
-            # For now, we'll just clear our references
-            print(f"Warning: Manual cleanup needed for API key ID: {self._current_api_key_id}")
-            self._current_api_key = None
-            self._current_api_key_id = None
-            return True
-        except Exception as e:
-            print(f"Warning: Failed to cleanup API key {self._current_api_key_id}: {e}")
-            return False
-
     async def delete_api_key(self, auth_token: str, api_key_id: str) -> bool:
         """Delete a specific API key"""
         try:
@@ -74,24 +57,3 @@ class ApiKeyService:
         except Exception as e:
             print(f"Error deleting API key {api_key_id}: {e}")
             return False
-
-
-class TemporaryApiKeyContext:
-    """Context manager for temporary API keys with proper cleanup"""
-
-    def __init__(self, auth_token: str):
-        self.auth_token = auth_token
-        self.api_key_service = ApiKeyService()
-        self.api_key: Optional[str] = None
-        self.api_key_id: Optional[str] = None
-
-    async def __aenter__(self):
-        """Create API key on enter"""
-        self.api_key = await self.api_key_service.create_temporary_api_key(self.auth_token)
-        self.api_key_id = self.api_key_service._current_api_key_id
-        return self.api_key
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Delete API key on exit"""
-        if self.api_key_id:
-            await self.api_key_service.delete_api_key(self.auth_token, self.api_key_id)

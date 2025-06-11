@@ -31,21 +31,35 @@ echo "Required default models:"
 echo "  Embedding: $DEFAULT_EMBEDDING_MODEL"
 echo "  Vision: $DEFAULT_VISION_MODEL"
 
-if [ -z "OLLAMA_CHAT_MODELS" ]; then
+if [ -z "$OLLAMA_CHAT_MODELS" ]; then
   echo "OLLAMA_CHAT_MODELS not set, using only required defaults"
   OLLAMA_CHAT_MODELS=""
 else
-  echo "Additional models from environment: OLLAMA_CHAT_MODELS"
+  echo "Additional models from environment: $OLLAMA_CHAT_MODELS"
 fi
 
 ALL_MODELS="$DEFAULT_EMBEDDING_MODEL,$DEFAULT_VISION_MODEL"
-if [ -n "OLLAMA_CHAT_MODELS" ]; then
-  ALL_MODELS="$ALL_MODELS,OLLAMA_CHAT_MODELS"
+if [ -n "$OLLAMA_CHAT_MODELS" ]; then
+  ALL_MODELS="$ALL_MODELS,$OLLAMA_CHAT_MODELS"
 fi
 
-echo "Complete model list: $ALL_MODELS"
+echo "=== DEBUG INFO ==="
+echo "DEFAULT_EMBEDDING_MODEL: '$DEFAULT_EMBEDDING_MODEL'"
+echo "DEFAULT_VISION_MODEL: '$DEFAULT_VISION_MODEL'"
+echo "OLLAMA_CHAT_MODELS: '$OLLAMA_CHAT_MODELS'"
+echo "ALL_MODELS: '$ALL_MODELS'"
+echo "MODELS array: "
 
 IFS=',' read -ra MODELS <<< "$ALL_MODELS"
+
+for i in "${!MODELS[@]}"; do
+  echo "  [$i]: '${MODELS[$i]}'"
+done
+
+echo "Number of models to process: ${#MODELS[@]}"
+echo "=================="
+
+echo "Complete model list: $ALL_MODELS"
 
 echo "Checking for existing models..."
 INSTALLED_MODELS=$(ollama list 2>/dev/null || echo "")
@@ -61,7 +75,7 @@ for model in "${MODELS[@]}"; do
     echo "✓ Model $model already installed, skipping..."
   else
     echo "⬇ Downloading model: $model..."
-    if ollama pull $model; then
+    if ollama pull "$model"; then
       echo "✓ Successfully downloaded $model"
     else
       echo "⚠ Warning: Failed to download $model, continuing anyway"
