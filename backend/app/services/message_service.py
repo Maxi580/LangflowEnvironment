@@ -181,7 +181,7 @@ class MessageService:
         """Send a message to a flow and return the response"""
         await self._validate_message_request(request, message_request)
 
-        user_id = get_user_id_from_request(request)
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             raise ValueError("Unable to extract user ID from authentication token")
 
@@ -249,7 +249,7 @@ class MessageService:
 
     async def get_session_information(self, request: Request, session_id: str) -> SessionInfo:
         """Get information about a specific chat session (user-scoped)"""
-        user_id = get_user_id_from_request(request)
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             raise ValueError("No valid authentication token found")
 
@@ -275,7 +275,7 @@ class MessageService:
 
     async def get_user_sessions(self, request: Request) -> List[Dict[str, Any]]:
         """Get all active sessions for the current user"""
-        user_id = get_user_id_from_request(request)
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             raise ValueError("No valid authentication token found")
 
@@ -298,7 +298,7 @@ class MessageService:
 
     async def end_chat_session(self, request: Request, session_id: str) -> SessionInfo:
         """End a specific chat session (user-scoped)"""
-        user_id = get_user_id_from_request(request)
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             raise ValueError("No valid authentication token found")
 

@@ -28,7 +28,6 @@ class QdrantRepository:
             return False
 
     async def create_collection(self, user_id: str, flow_id: str, vector_size: int) -> CollectionInfo:
-        """Create a new collection"""
         try:
             collection_name = get_collection_name(user_id, flow_id)
             self.client.create_collection(

@@ -155,7 +155,7 @@ class FlowService:
         token = get_user_token(request)
         if not token:
             raise ValueError("No valid authentication token found")
-        user_id = get_user_id_from_request(request)
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             raise ValueError("No valid authentication token found")
 
@@ -275,15 +275,15 @@ class FlowService:
                     }
                     public_flows.append(public_flow)
 
-            print(f"✅ Found {len(public_flows)} public flows out of {len(all_flows)} total flows")
+            print(f"Found {len(public_flows)} public flows out of {len(all_flows)} total flows")
             return public_flows
 
         except ValueError as e:
-            print(f"❌ Admin authentication error: {e}")
+            print(f"Admin authentication error: {e}")
             return []
 
         except Exception as e:
-            print(f"❌ Error getting all public flows: {e}")
+            print(f"Error getting all public flows: {e}")
             return []
 
     async def prepare_flow_execution_payload(self, request: Request, flow_id: str, user_id: str,
@@ -401,7 +401,7 @@ class FlowService:
             flow_id: str
     ) -> CollectionCreateResponse:
         """Create a new Qdrant collection using flow_id as collection name"""
-        user_id = get_user_id_from_request(request)
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             raise ValueError("No valid authentication token found")
 
@@ -438,7 +438,7 @@ class FlowService:
             flow_id: str
     ) -> Dict[str, Any]:
         """Delete a collection by flow_id"""
-        user_id = get_user_id_from_request(request)
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             raise ValueError("No valid authentication token found")
 
@@ -470,7 +470,7 @@ class FlowService:
             flow_id: str
     ) -> CollectionFilesResponse:
         """List all files in a specific collection using flow_id"""
-        user_id = get_user_id_from_request(request)
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             raise ValueError("No valid authentication token found")
 
@@ -521,7 +521,7 @@ class FlowService:
             include_images: bool = True,
     ) -> FileUploadResponse:
         """Upload a file to a specific collection using flow_id with background processing"""
-        user_id = get_user_id_from_request(request)
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             raise ValueError("No valid authentication token found")
 
@@ -744,7 +744,7 @@ class FlowService:
             file_path: str
     ) -> FileDeletionResponse:
         """Delete a specific file from a collection using flow_id"""
-        user_id = get_user_id_from_request(request)
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             raise ValueError("No valid authentication token found")
 
@@ -796,7 +796,7 @@ class FlowService:
             flow_id: str
     ) -> Dict[str, Any]:
         """Get detailed information about a collection"""
-        user_id = get_user_id_from_request(request)
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             raise ValueError("No valid authentication token found")
 

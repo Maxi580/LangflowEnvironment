@@ -104,7 +104,7 @@ async def get_processing_files(
 ) -> Dict[str, Any]:
     """Get all files currently being processed for a specific flow"""
     try:
-        user_id = get_user_id_from_request(request)
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             raise HTTPException(status_code=401, detail="No valid authentication token found")
 

@@ -18,6 +18,7 @@ class LangflowRepository:
         self.flows_endpoint = os.getenv("LF_FLOWS_BASE_ENDPOINT")
         self.flows_upload_endpoint = os.getenv("LF_FLOWS_UPLOAD_ENDPOINT")
         self.run_flow_endpoint = os.getenv("LF_RUN_FLOW_ENDPOINT")
+        self.user_whoami_endpoint = os.getenv("LF_USER_WHOAMI")
 
     async def check_connection(self) -> bool:
         """Check if Langflow service is reachable"""
@@ -43,6 +44,19 @@ class LangflowRepository:
         response = requests.post(url, headers=headers, data=payload)
         if not response.ok:
             raise Exception(f"Authentication failed: {response.text}")
+
+        return response.json()
+
+    async def get_current_user(self, access_token: str) -> Dict[str, Any]:
+        url = f"{self.base_url}{self.user_whoami_endpoint}"
+        headers = {
+            'Accept': 'application/json',
+            'Authorization': f'Bearer {access_token}'
+        }
+
+        response = requests.get(url, headers=headers, timeout=10)
+        if not response.ok:
+            raise Exception(f"User validation failed: {response.status_code} - {response.text}")
 
         return response.json()
 

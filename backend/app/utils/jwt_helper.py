@@ -3,6 +3,7 @@ import jwt
 import time
 import os
 from typing import Optional, Tuple, Dict, Any
+from ..external.langflow_repository import LangflowRepository
 
 _admin_token_cache: Dict[str, Any] = {"token": None, "expiry": 0}
 
@@ -112,48 +113,37 @@ def get_user_token(request: Request) -> Optional[str]:
     return access_token
 
 
-def get_user_id_from_token(token: str) -> Optional[str]:
-    """
-    Extract user ID from JWT token
-
-    Args:
-        token: JWT token string
-
-    Returns:
-        User ID string if found, None otherwise
-    """
+async def get_user_id_from_token(token: str) -> Optional[str]:
     try:
-        decoded = jwt.decode(token, options={"verify_signature": False})
-        user_id = decoded.get("sub")
+        langflow_repo = LangflowRepository()
+        user_data = await langflow_repo.get_current_user(token)
+
+        user_id = user_data.get("id") or user_data.get("sub")
+        print(f"USER_ID FROM TOKEN: {user_id}")
 
         if user_id:
-            print(f"Extracted user ID: {user_id}")
-            return user_id
+            print(f"Successfully validated user ID: {user_id}")
+            return str(user_id)
         else:
-            print("No 'sub' field found in token")
+            print("No user ID found in Langflow response")
             return None
 
     except Exception as e:
-        print(f"Error extracting user ID from token: {e}")
+        print(f"Error validating user ID with Langflow: {e}")
         return None
 
 
-def get_user_id_from_request(request: Request) -> Optional[str]:
-    """
-    Extract user ID from request by getting access token first
-
-    Args:
-        request: FastAPI request object
-
-    Returns:
-        User ID string if found, None otherwise
-    """
+async def get_user_id_from_request(request: Request) -> Optional[str]:
     access_token = get_user_token(request)
     if not access_token:
-        print("No access token found in request")
         return None
 
-    return get_user_id_from_token(access_token)
+    try:
+        return await get_user_id_from_token(access_token)
+
+    except Exception as e:
+        print(f"Error getting user info: {e}")
+        return None
 
 
 def get_token_info(token: str) -> Optional[Dict[str, Any]]:
@@ -247,8 +237,6 @@ def is_token_valid(token: str, min_time_remaining: int = 0) -> bool:
     except Exception:
         return False
 
-
-# NEW ADMIN TOKEN FUNCTIONS
 
 async def get_admin_token(langflow_repo) -> str:
     """
