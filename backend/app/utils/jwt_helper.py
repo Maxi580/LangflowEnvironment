@@ -1,7 +1,14 @@
 from fastapi import Request
 import jwt
 import time
+import os
 from typing import Optional, Tuple, Dict, Any
+
+_admin_token_cache: Dict[str, Any] = {"token": None, "expiry": 0}
+
+SUPERUSER_USERNAME = os.getenv("BACKEND_LF_USERNAME")
+SUPERUSER_PASSWORD = os.getenv("BACKEND_LF_PASSWORD")
+TOKEN_EXPIRY_BUFFER = 300
 
 
 def _is_valid_langflow_token(token: str, token_type: str) -> bool:
@@ -9,10 +16,8 @@ def _is_valid_langflow_token(token: str, token_type: str) -> bool:
     Check if token is a valid Langflow JWT with specified type
     """
     try:
-        # Decode without verification to check structure
         decoded = jwt.decode(token, options={"verify_signature": False})
 
-        # Check if it has the required fields for Langflow token
         has_sub = "sub" in decoded
         has_type = decoded.get("type") == token_type
         has_exp = "exp" in decoded
@@ -164,7 +169,6 @@ def get_token_info(token: str) -> Optional[Dict[str, Any]]:
     try:
         decoded = jwt.decode(token, options={"verify_signature": False})
 
-        # Calculate time remaining
         current_time = int(time.time())
         exp_time = decoded.get("exp", 0)
         time_remaining = max(0, exp_time - current_time)
@@ -215,3 +219,109 @@ def get_user_info_from_request(request: Request) -> Optional[Dict[str, Any]]:
             result["refresh_token_info"] = refresh_info
 
     return result
+
+
+def is_token_valid(token: str, min_time_remaining: int = 0) -> bool:
+    """
+    Check if a token is valid and not expired
+
+    Args:
+        token: JWT token string
+        min_time_remaining: Minimum seconds that must remain before expiry
+
+    Returns:
+        True if token is valid and has enough time remaining
+    """
+    try:
+        decoded = jwt.decode(token, options={"verify_signature": False})
+
+        if not decoded.get("sub") or not decoded.get("exp"):
+            return False
+
+        current_time = int(time.time())
+        exp_time = decoded.get("exp", 0)
+        time_remaining = exp_time - current_time
+
+        return time_remaining > min_time_remaining
+
+    except Exception:
+        return False
+
+
+# NEW ADMIN TOKEN FUNCTIONS
+
+async def get_admin_token(langflow_repo) -> str:
+    """
+    Get cached admin token or create new one
+
+    Args:
+        langflow_repo: LangflowRepository instance to use for authentication
+
+    Returns:
+        Admin access token
+
+    Raises:
+        ValueError: If admin credentials are not configured or authentication fails
+    """
+    global _admin_token_cache
+
+    if not SUPERUSER_USERNAME or not SUPERUSER_PASSWORD:
+        raise ValueError("Admin credentials not configured. Set BACKEND_LF_USERNAME and BACKEND_LF_PASSWORD")
+
+    current_time = time.time()
+
+    if (_admin_token_cache["token"] and
+            _admin_token_cache["expiry"] > current_time + TOKEN_EXPIRY_BUFFER):
+        return _admin_token_cache["token"]
+
+    token_data = await langflow_repo.authenticate_user(
+        SUPERUSER_USERNAME, SUPERUSER_PASSWORD
+    )
+
+    access_token = token_data.get("access_token")
+    if not access_token:
+        raise ValueError("Admin authentication failed")
+
+    expiry = get_token_expiry(access_token)
+    _admin_token_cache["token"] = access_token
+    _admin_token_cache["expiry"] = expiry
+
+    print(f"New admin token obtained, expires in {int((expiry - current_time) / 60)} minutes")
+    return access_token
+
+
+def clear_admin_token_cache():
+    """Clear the cached admin token"""
+    global _admin_token_cache
+    _admin_token_cache = {"token": None, "expiry": 0}
+    print("Admin token cache cleared")
+
+
+def get_admin_token_info() -> Dict[str, Any]:
+    """
+    Get information about the currently cached admin token
+
+    Returns:
+        Dictionary with admin token information
+    """
+    global _admin_token_cache
+    current_time = time.time()
+
+    if not _admin_token_cache["token"]:
+        return {
+            "has_token": False,
+            "message": "No admin token cached"
+        }
+
+    time_remaining = max(0, _admin_token_cache["expiry"] - current_time)
+    is_valid = time_remaining > TOKEN_EXPIRY_BUFFER
+
+    return {
+        "has_token": True,
+        "is_valid": is_valid,
+        "expires_at": _admin_token_cache["expiry"],
+        "time_remaining_seconds": int(time_remaining),
+        "time_remaining_minutes": int(time_remaining / 60),
+        "will_refresh_in_seconds": int(
+            time_remaining - TOKEN_EXPIRY_BUFFER) if time_remaining > TOKEN_EXPIRY_BUFFER else 0
+    }

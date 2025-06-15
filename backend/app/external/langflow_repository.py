@@ -133,6 +133,27 @@ class LangflowRepository:
 
         return response.json()
 
+    async def get_all_flows_as_admin(self, token: str) -> List[Dict[str, Any]]:
+        url = f"{self.base_url}{self.flows_endpoint}"
+        headers = {
+            'Accept': 'application/json',
+            'Authorization': f'Bearer {token}'
+        }
+
+        params = {
+            'get_all': 'true',
+            'remove_example_flows': 'false',
+            'header_flows': 'false'
+        }
+
+        response = requests.get(url, headers=headers, params=params, timeout=30)
+        if not response.ok:
+            raise Exception(f"Failed to get all flows: HTTP {response.status_code} - {response.text}")
+
+        flows = response.json()
+        print(f"📊 Retrieved {len(flows)} total flows from Langflow")
+        return flows
+
     async def get_flow_by_id(self, flow_id: str, token: str) -> Dict[str, Any]:
         url = f"{self.base_url}{self.flows_endpoint.rstrip('/')}/{flow_id}"
         headers = {

@@ -9,7 +9,7 @@ from fastapi import Request, UploadFile, BackgroundTasks
 from datetime import datetime
 
 from ..external.langflow_repository import LangflowRepository
-from ..external.qdrant_repository import QdrantRepository
+from ..external.qdrant_repository import QdrantRepository, get_collection_name
 from ..external.ollama_repository import OllamaRepository
 from ..models.flow import (
     Flow, FlowDeletionResult, FlowExecutionResult,
@@ -20,11 +20,12 @@ from ..models.document import (
     FileDeletionResponse, CollectionFilesResponse, FileInfo,
     DocumentChunk, DocumentMetadata
 )
-from ..utils.jwt_helper import get_user_id_from_request, get_user_token
+from ..utils.jwt_helper import get_user_id_from_request, get_user_token, get_admin_token
 from ..utils.processing_tracker import processing_tracker
 from ..utils.file_embedding import read_file_content, get_text_embedding
 
 BACKEND_UPLOAD_DIR = os.getenv("BACKEND_UPLOAD_DIR", "/tmp/uploads")
+LANGFLOW_URL = os.getenv('LANGFLOW_URL')
 
 
 class FlowService:
@@ -54,13 +55,31 @@ class FlowService:
         return flows
 
     async def validate_user_flow_access(self, request: Request, flow_id: str) -> bool:
-        """Validate if user has access to a specific flow"""
         try:
-            flows = await self.get_user_flows_from_request(request)
-            user_flow_ids = [flow.get('id') for flow in flows if flow.get('id')]
-            return flow_id in user_flow_ids
+            public_flows = await self.get_public_flows()
+            public_flow_ids = [flow.get('id') for flow in public_flows if flow.get('id')]
+
+            if flow_id in public_flow_ids:
+                print(f"Flow {flow_id} is public - access granted")
+                return True
+
+            try:
+                user_flows = await self.get_user_flows_from_request(request)
+                user_flow_ids = [flow.get('id') for flow in user_flows if flow.get('id')]
+
+                if flow_id in user_flow_ids:
+                    print(f"Flow {flow_id} is owned by user - access granted")
+                    return True
+
+            except Exception as e:
+                print(f"User authentication failed, but flow might be public: {e}")
+                return False
+
+            print(f"Flow {flow_id} not found in user flows or public flows - access denied")
+            return False
+
         except Exception as e:
-            print(f"Error checking flow access: {e}")
+            print(f"Error checking flow access for {flow_id}: {e}")
             return False
 
     async def get_flow_by_id(self, request: Request, flow_id: str) -> Dict[str, Any]:
@@ -136,6 +155,9 @@ class FlowService:
         token = get_user_token(request)
         if not token:
             raise ValueError("No valid authentication token found")
+        user_id = get_user_id_from_request(request)
+        if not user_id:
+            raise ValueError("No valid authentication token found")
 
         # Validate access first
         has_access = await self.validate_user_flow_access(request, flow_id)
@@ -147,26 +169,26 @@ class FlowService:
             )
 
         try:
-            # Delete from Langflow
             await self.langflow_repo.delete_flow(flow_id, token)
 
-            # Clean up associated collection
             collection_cleanup_details = None
             collection_cleanup_error = None
             collections_cleaned = False
 
             try:
-                if await self.qdrant_repo.collection_exists(flow_id):
-                    success = await self.qdrant_repo.delete_collection(flow_id)
+                if await self.qdrant_repo.collection_exists(user_id, flow_id):
+                    success = await self.qdrant_repo.delete_collection(user_id, flow_id)
                     collections_cleaned = success
                     collection_cleanup_details = {
-                        "collection_name": flow_id,
+                        "flow_id": flow_id,
+                        "user_id": user_id,
                         "deleted": success
                     }
                 else:
                     collections_cleaned = True
                     collection_cleanup_details = {
-                        "collection_name": flow_id,
+                        "flow_id": flow_id,
+                        "user_id": user_id,
                         "message": "Collection did not exist"
                     }
             except Exception as e:
@@ -220,7 +242,51 @@ class FlowService:
 
         return results
 
-    async def prepare_flow_execution_payload(self, request: Request, flow_id: str,
+    async def get_public_flows(self) -> List[Dict[str, Any]]:
+        """
+        Get all flows that have access_type set to PUBLIC
+        Uses admin token via JWT helper to access all flows across all users
+
+        Returns:
+            List of public flow dictionaries with safe public information
+        """
+        try:
+            admin_token = await get_admin_token(self.langflow_repo)
+
+            all_flows = await self.langflow_repo.get_all_flows_as_admin(admin_token)
+
+            public_flows = []
+            for flow in all_flows:
+                access_type = flow.get('access_type', 'PRIVATE')
+
+                if access_type.upper() == 'PUBLIC':
+                    public_flow = {
+                        'id': flow.get('id'),
+                        'name': flow.get('name'),
+                        'description': flow.get('description'),
+                        'updated_at': flow.get('updated_at'),
+                        'access_type': access_type,
+                        'public_url': f"{LANGFLOW_URL}/public_flow/{flow.get('id')}",
+                        'is_public': True,
+                        'created_at': flow.get('created_at'),
+                        'folder_id': flow.get('folder_id'),
+                        'tags': flow.get('tags', []),
+                        'endpoint_name': flow.get('endpoint_name'),
+                    }
+                    public_flows.append(public_flow)
+
+            print(f"✅ Found {len(public_flows)} public flows out of {len(all_flows)} total flows")
+            return public_flows
+
+        except ValueError as e:
+            print(f"❌ Admin authentication error: {e}")
+            return []
+
+        except Exception as e:
+            print(f"❌ Error getting all public flows: {e}")
+            return []
+
+    async def prepare_flow_execution_payload(self, request: Request, flow_id: str, user_id: str,
                                              message: str, session_id: Optional[str] = None,
                                              tweaks: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
@@ -229,6 +295,7 @@ class FlowService:
         Args:
             request: FastAPI request object
             flow_id: ID of the flow to execute
+            user_id: ID of the user to execute
             message: User message to send to the flow
             session_id: Optional session ID for conversation continuity
             tweaks: Optional tweaks to modify flow behavior
@@ -258,10 +325,11 @@ class FlowService:
             print(f"Found {len(qdrant_component_ids)} Qdrant components: {qdrant_component_ids}")
 
             auto_tweaks = {}
+            collection_name = get_collection_name(user_id, flow_id)
             if qdrant_component_ids:
                 for qdrant_id in qdrant_component_ids:
                     auto_tweaks[qdrant_id] = {
-                        "collection_name": flow_id
+                        "collection_name": collection_name
                     }
                 print(f"Added collection_name tweaks for Qdrant components: {list(auto_tweaks.keys())}")
 
@@ -305,7 +373,6 @@ class FlowService:
         api_key_id = api_key_response.get("id")
 
         try:
-            # Execute the flow
             response = await self.langflow_repo.run_flow(flow_id, payload, api_key)
 
             return FlowExecutionResult(
@@ -345,8 +412,8 @@ class FlowService:
         if not has_access:
             raise ValueError(f"Access denied: You don't have permission to access flow '{flow_id}'")
 
-        if await self.qdrant_repo.collection_exists(flow_id):
-            collection_info = await self.qdrant_repo.get_collection_info(flow_id)
+        if await self.qdrant_repo.collection_exists(user_id, flow_id):
+            collection_info = await self.qdrant_repo.get_collection_info(user_id, flow_id)
             return CollectionCreateResponse(
                 success=True,
                 message="Collection already exists",
@@ -356,7 +423,7 @@ class FlowService:
 
         vector_size = await self.ollama_repo.get_vector_size()
 
-        collection_info = await self.qdrant_repo.create_collection(flow_id, vector_size)
+        collection_info = await self.qdrant_repo.create_collection(user_id, flow_id, vector_size)
 
         return CollectionCreateResponse(
             success=True,
@@ -382,10 +449,10 @@ class FlowService:
         if not has_access:
             raise ValueError(f"Access denied: You don't have permission to access flow '{flow_id}'")
 
-        if not await self.qdrant_repo.collection_exists(flow_id):
+        if not await self.qdrant_repo.collection_exists(user_id, flow_id):
             raise ValueError(f"Collection for flow '{flow_id}' not found")
 
-        success = await self.qdrant_repo.delete_collection(flow_id)
+        success = await self.qdrant_repo.delete_collection(user_id, flow_id)
 
         if not success:
             raise ValueError(f"Failed to delete collection for flow '{flow_id}'")
@@ -394,7 +461,7 @@ class FlowService:
             "success": True,
             "message": f"Collection for flow '{flow_id}' deleted successfully",
             "flow_id": flow_id,
-            "collection_name": flow_id
+            "user_id": user_id
         }
 
     async def list_collection_files(
@@ -414,10 +481,10 @@ class FlowService:
         if not has_access:
             raise ValueError(f"Access denied: You don't have permission to access flow '{flow_id}'")
 
-        if not await self.qdrant_repo.collection_exists(flow_id):
+        if not await self.qdrant_repo.collection_exists(user_id, flow_id):
             raise ValueError(f"Collection for flow '{flow_id}' not found")
 
-        files_data = await self.qdrant_repo.get_files_in_collection(flow_id)
+        files_data = await self.qdrant_repo.get_files_in_collection(user_id, flow_id)
 
         files = []
         for file_data in files_data:
@@ -433,10 +500,12 @@ class FlowService:
             )
             files.append(file_info)
 
+        collection_name = get_collection_name(user_id, flow_id)
+
         return CollectionFilesResponse(
             success=True,
             flow_id=flow_id,
-            collection_name=flow_id,
+            collection_name=collection_name,
             files=files,
             total_files=len(files)
         )
@@ -467,7 +536,7 @@ class FlowService:
             raise ValueError(f"Access denied: You don't have permission to access flow '{flow_id}'")
 
         # Ensure collection exists
-        if not await self.qdrant_repo.collection_exists(flow_id):
+        if not await self.qdrant_repo.collection_exists(user_id, flow_id):
             raise ValueError(f"Collection for flow '{flow_id}' not found. Please create the collection first.")
 
         upload_dir = Path(BACKEND_UPLOAD_DIR) / flow_id
@@ -483,7 +552,7 @@ class FlowService:
         except Exception as e:
             raise ValueError(f"Failed to save file: {str(e)}")
 
-        if await self.qdrant_repo.check_file_exists(flow_id, str(file_path)):
+        if await self.qdrant_repo.check_file_exists(user_id, flow_id, str(file_path)):
             file_path.unlink(missing_ok=True)
             raise ValueError(f"File '{file.filename}' already exists in collection for flow '{flow_id}'")
 
@@ -511,6 +580,7 @@ class FlowService:
             file_name=file.filename,
             file_size=file_size,
             file_id=file_id,
+            user_id=user_id,
             flow_id=flow_id,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
@@ -531,6 +601,7 @@ class FlowService:
             file_name: str,
             file_size: int,
             file_id: str,
+            user_id: str,
             flow_id: str,
             chunk_size: int,
             chunk_overlap: int,
@@ -542,7 +613,7 @@ class FlowService:
         """
         try:
             asyncio.run(self._process_file_background_async(
-                file_path, file_name, file_size, file_id, flow_id,
+                file_path, file_name, file_size, file_id, user_id, flow_id,
                 chunk_size, chunk_overlap, include_images
             ))
         except Exception as e:
@@ -562,6 +633,7 @@ class FlowService:
             file_name: str,
             file_size: int,
             file_id: str,
+            user_id: str,
             flow_id: str,
             chunk_size: int,
             chunk_overlap: int,
@@ -641,7 +713,7 @@ class FlowService:
                 "chunks_created": len(document_chunks)
             })
 
-            success = await self.qdrant_repo.upload_documents(flow_id, document_chunks)
+            success = await self.qdrant_repo.upload_documents(user_id, flow_id, document_chunks)
 
             if success:
                 print(f"✅ Successfully uploaded {len(document_chunks)} chunks to Qdrant")
@@ -685,15 +757,15 @@ class FlowService:
             raise ValueError(f"Access denied: You don't have permission to access flow '{flow_id}'")
 
         # Check if collection exists
-        if not await self.qdrant_repo.collection_exists(flow_id):
+        if not await self.qdrant_repo.collection_exists(user_id, flow_id):
             raise ValueError(f"Collection for flow '{flow_id}' not found")
 
         # Check if file exists in collection
-        if not await self.qdrant_repo.check_file_exists(flow_id, file_path):
+        if not await self.qdrant_repo.check_file_exists(user_id, flow_id, file_path):
             raise ValueError(f"File not found in collection for flow '{flow_id}'")
 
         # Delete file from Qdrant
-        deleted_count = await self.qdrant_repo.delete_documents_by_file_path(flow_id, file_path)
+        deleted_count = await self.qdrant_repo.delete_documents_by_file_path(user_id, flow_id, file_path)
 
         # Delete physical file
         physical_file_deleted = False
@@ -706,12 +778,14 @@ class FlowService:
             except Exception as e:
                 print(f"Warning: Could not delete physical file {file_path_obj}: {e}")
 
+        collection_name = get_collection_name(user_id, flow_id)
+
         return FileDeletionResponse(
             success=True,
             message=f"File deleted successfully from collection for flow '{flow_id}'",
             file_path=file_path,
             flow_id=flow_id,
-            collection_name=flow_id,
+            collection_name=collection_name,
             qdrant_deleted=deleted_count > 0,
             physical_file_deleted=physical_file_deleted
         )
@@ -735,10 +809,10 @@ class FlowService:
             raise ValueError(f"Access denied: You don't have permission to access flow '{flow_id}'")
 
         # Check if collection exists and get info
-        if not await self.qdrant_repo.collection_exists(flow_id):
+        if not await self.qdrant_repo.collection_exists(user_id, flow_id):
             raise ValueError(f"Collection for flow '{flow_id}' not found")
 
-        collection_info = await self.qdrant_repo.get_collection_info(flow_id)
+        collection_info = await self.qdrant_repo.get_collection_info(user_id, flow_id)
 
         return {
             "success": True,

@@ -2,14 +2,17 @@ import React, { useState, useRef, useEffect } from 'react';
 import flowService from '../../../requests/FlowRequests';
 import fileService from '../../../requests/FileRequests';
 
-
 const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
   const [flows, setFlows] = useState([]);
+  const [publicFlows, setPublicFlows] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingPublic, setIsLoadingPublic] = useState(false);
   const [error, setError] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('user'); // 'user' or 'public'
+  const [showPublicFlows, setShowPublicFlows] = useState(true);
 
   const dropdownRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -17,7 +20,10 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
   // Load flows on component mount
   useEffect(() => {
     fetchFlows();
-  }, []);
+    if (showPublicFlows) {
+      fetchPublicFlows();
+    }
+  }, [showPublicFlows]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -32,7 +38,7 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
   }, []);
 
   /**
-   * Fetch all user flows
+   * Fetch user flows
    */
   const fetchFlows = async () => {
     setIsLoading(true);
@@ -45,11 +51,39 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
       });
       setFlows(data);
     } catch (err) {
-      console.error('Error fetching flows:', err);
-      setError(`Failed to load flows: ${err.message}`);
+      console.error('Error fetching user flows:', err);
+      setError(`Failed to load user flows: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  /**
+   * Fetch public flows
+   */
+  const fetchPublicFlows = async () => {
+    setIsLoadingPublic(true);
+
+    try {
+      const data = await flowService.getPublicFlows();
+      setPublicFlows(data);
+    } catch (err) {
+      console.error('Error fetching public flows:', err);
+      // Don't set error state for public flows as they're optional
+      console.warn(`Public flows unavailable: ${err.message}`);
+    } finally {
+      setIsLoadingPublic(false);
+    }
+  };
+
+  /**
+   * Refresh all flows
+   */
+  const refreshAllFlows = async () => {
+    await Promise.all([
+      fetchFlows(),
+      showPublicFlows ? fetchPublicFlows() : Promise.resolve()
+    ]);
   };
 
   /**
@@ -77,9 +111,10 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
         accessType: 'PRIVATE'
       });
 
-      // Add the new flow to the list and select it
+      // Add the new flow to the user flows list and select it
       setFlows(prevFlows => [result, ...prevFlows]);
       handleFlowSelect(result);
+      setActiveTab('user'); // Switch to user tab to show the new flow
 
       // Reset file input
       if (fileInputRef.current) {
@@ -94,7 +129,7 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
   };
 
   /**
-   * Handle flow deletion with collection cleanup
+   * Handle flow deletion with collection cleanup (only for user flows)
    */
   const handleDeleteFlow = async (flowId, flowName, event) => {
     event.stopPropagation(); // Prevent dropdown from closing
@@ -110,7 +145,6 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
       } catch (collectionError) {
         console.warn(`Failed to delete collection ${flowId}:`, collectionError);
         // Don't fail the entire operation if collection deletion fails
-        // The collection might not exist or might already be deleted
       }
 
       // Then delete the flow from LangFlow
@@ -133,14 +167,25 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
     }
   };
 
+  // Get current flows based on active tab
+  const getCurrentFlows = () => {
+    if (activeTab === 'public') {
+      return publicFlows;
+    }
+    return flows;
+  };
+
   // Filter flows based on search query
-  const filteredFlows = flows.filter(flow =>
+  const filteredFlows = getCurrentFlows().filter(flow =>
     flow.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     flow.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Get selected flow info
-  const selectedFlow = flows.find(flow => flow.id === selectedFlowId);
+  // Get selected flow info from both user and public flows
+  const selectedFlow = [...flows, ...publicFlows].find(flow => flow.id === selectedFlowId);
+
+  // Calculate total flows count
+  const totalFlowsCount = flows.length + publicFlows.length;
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -176,16 +221,24 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
               {selectedFlow ? selectedFlow.name : 'Select a Flow'}
             </div>
             <div className="text-slate-400 text-sm">
-              {selectedFlow
-                ? `ID: ${selectedFlow.id}`
-                : `${flows.length} flows available`
-              }
+              {selectedFlow ? (
+                <span>
+                  ID: {selectedFlow.id}
+                  {publicFlows.some(f => f.id === selectedFlow.id) && (
+                    <span className="ml-2 px-1.5 py-0.5 bg-green-600 text-green-100 text-xs rounded">
+                      PUBLIC
+                    </span>
+                  )}
+                </span>
+              ) : (
+                `${totalFlowsCount} flows available`
+              )}
             </div>
           </div>
         </div>
 
         <div className="flex items-center space-x-2">
-          {isLoading && (
+          {(isLoading || isLoadingPublic) && (
             <svg className="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -206,7 +259,55 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
       {isOpen && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800 border border-slate-600
                         rounded-lg shadow-xl z-50 max-h-96 overflow-hidden">
-          {/* Header with Search and Actions */}
+
+          {/* Header with Tabs */}
+          <div className="border-b border-slate-600 bg-slate-700">
+            <div className="flex">
+              <button
+                onClick={() => setActiveTab('user')}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                  activeTab === 'user'
+                    ? 'text-blue-400 border-b-2 border-blue-400 bg-slate-600'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-600'
+                }`}
+              >
+                <div className="flex items-center justify-center space-x-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span>My Flows</span>
+                  <span className="text-xs bg-slate-500 px-1.5 py-0.5 rounded">
+                    {flows.length}
+                  </span>
+                </div>
+              </button>
+
+              {showPublicFlows && (
+                <button
+                  onClick={() => setActiveTab('public')}
+                  className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                    activeTab === 'public'
+                      ? 'text-green-400 border-b-2 border-green-400 bg-slate-600'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-600'
+                  }`}
+                >
+                  <div className="flex items-center justify-center space-x-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                    </svg>
+                    <span>Public</span>
+                    <span className="text-xs bg-slate-500 px-1.5 py-0.5 rounded">
+                      {publicFlows.length}
+                    </span>
+                  </div>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Search and Actions */}
           <div className="p-3 border-b border-slate-600 bg-slate-700">
             <div className="flex items-center space-x-2 mb-3">
               {/* Search Input */}
@@ -218,7 +319,7 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
                 </svg>
                 <input
                   type="text"
-                  placeholder="Search flows..."
+                  placeholder={`Search ${activeTab === 'public' ? 'public' : 'your'} flows...`}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 bg-slate-600 border border-slate-500 rounded
@@ -228,11 +329,11 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
 
               {/* Refresh Button */}
               <button
-                onClick={fetchFlows}
-                disabled={isLoading}
+                onClick={refreshAllFlows}
+                disabled={isLoading || isLoadingPublic}
                 className="p-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50
                          text-white rounded transition-colors"
-                title="Refresh flows"
+                title="Refresh all flows"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -243,25 +344,27 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
 
             {/* Action Buttons */}
             <div className="flex space-x-2">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50
-                         text-white rounded transition-colors flex items-center justify-center space-x-2"
-              >
-                {isUploading ? (
-                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                ) : (
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                )}
-                <span className="text-sm">{isUploading ? 'Uploading...' : 'Upload'}</span>
-              </button>
+              {activeTab === 'user' && (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50
+                           text-white rounded transition-colors flex items-center justify-center space-x-2"
+                >
+                  {isUploading ? (
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  ) : (
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                  )}
+                  <span className="text-sm">{isUploading ? 'Uploading...' : 'Upload'}</span>
+                </button>
+              )}
 
               {selectedFlow && (
                 <button
@@ -274,12 +377,28 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
                   </svg>
                 </button>
               )}
+
+              {/* Toggle Public Flows */}
+              <button
+                onClick={() => setShowPublicFlows(!showPublicFlows)}
+                className={`px-3 py-2 rounded transition-colors ${
+                  showPublicFlows 
+                    ? 'bg-green-600 hover:bg-green-700 text-white' 
+                    : 'bg-slate-600 hover:bg-slate-500 text-slate-300'
+                }`}
+                title={showPublicFlows ? 'Hide public flows' : 'Show public flows'}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m-9 9a9 9 0 919-9" />
+                </svg>
+              </button>
             </div>
           </div>
 
           {/* Flows List */}
           <div className="max-h-64 overflow-y-auto">
-            {isLoading ? (
+            {(activeTab === 'user' ? isLoading : isLoadingPublic) ? (
               <div className="p-6 text-center">
                 <div className="flex items-center justify-center mb-2">
                   <svg className="animate-spin h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24">
@@ -287,7 +406,9 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                 </div>
-                <p className="text-slate-400 text-sm">Loading flows...</p>
+                <p className="text-slate-400 text-sm">
+                  Loading {activeTab === 'public' ? 'public' : 'your'} flows...
+                </p>
               </div>
             ) : filteredFlows.length === 0 ? (
               <div className="p-6 text-center">
@@ -296,65 +417,79 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
                         d="M34 40h10v-4a6 6 0 00-10.712-3.714M34 40H14m20 0v-4a9.971 9.971 0 00-.712-3.714M14 40H4v-4a6 6 0 0110.713-3.714M14 40v-4c0-1.313.253-2.566.713-3.714m0 0A9.971 9.971 0 0124 24c4.21 0 7.813 2.602 9.288 6.286" />
                 </svg>
                 <p className="text-slate-400 text-sm">
-                  {searchQuery ? 'No flows match your search' : 'No flows found'}
+                  {searchQuery ? `No ${activeTab === 'public' ? 'public' : ''} flows match your search` :
+                   activeTab === 'public' ? 'No public flows available' : 'No flows found'}
                 </p>
                 <p className="text-slate-500 text-xs mt-1">
-                  {searchQuery ? 'Try a different search term' : 'Upload a flow file to get started'}
+                  {searchQuery ? 'Try a different search term' :
+                   activeTab === 'public' ? 'Check back later for public flows' : 'Upload a flow file to get started'}
                 </p>
               </div>
             ) : (
-              filteredFlows.map((flow) => (
-                <div
-                  key={flow.id}
-                  className={`px-4 py-3 border-b border-slate-600 last:border-b-0 
-                             hover:bg-slate-700 cursor-pointer transition-colors
-                             ${selectedFlowId === flow.id ? 'bg-blue-900/30 border-blue-500/50' : ''}`}
-                  onClick={() => handleFlowSelect(flow)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <h3 className="font-medium text-white truncate">{flow.name}</h3>
-                        {selectedFlowId === flow.id && (
-                          <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </div>
-                      <p className="text-xs text-slate-400 truncate">
-                        {flow.description || 'No description'}
-                      </p>
-                      <p className="text-xs text-slate-500 font-mono mt-1">
-                        {flow.id}
-                      </p>
-                    </div>
+              filteredFlows.map((flow) => {
+                const isPublic = activeTab === 'public';
+                const isUserFlow = activeTab === 'user';
 
-                    <button
-                      onClick={(e) => handleDeleteFlow(flow.id, flow.name, e)}
-                      className="ml-2 p-1 text-slate-400 hover:text-red-400 hover:bg-red-900/20
-                               rounded transition-colors flex-shrink-0"
-                      title={`Delete flow and associated collection`}
-                    >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                return (
+                  <div
+                    key={flow.id}
+                    className={`px-4 py-3 border-b border-slate-600 last:border-b-0 
+                               hover:bg-slate-700 cursor-pointer transition-colors
+                               ${selectedFlowId === flow.id ? 'bg-blue-900/30 border-blue-500/50' : ''}`}
+                    onClick={() => handleFlowSelect(flow)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <h3 className="font-medium text-white truncate">{flow.name}</h3>
+                          {isPublic && (
+                            <span className="px-1.5 py-0.5 bg-green-600 text-green-100 text-xs rounded flex-shrink-0">
+                              PUBLIC
+                            </span>
+                          )}
+                          {selectedFlowId === flow.id && (
+                            <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 truncate">
+                          {flow.description || 'No description'}
+                        </p>
+                        <p className="text-xs text-slate-500 font-mono mt-1">
+                          {flow.id}
+                        </p>
+                      </div>
+
+                      {/* Only show delete button for user flows */}
+                      {isUserFlow && (
+                        <button
+                          onClick={(e) => handleDeleteFlow(flow.id, flow.name, e)}
+                          className="ml-2 p-1 text-slate-400 hover:text-red-400 hover:bg-red-900/20
+                                   rounded transition-colors flex-shrink-0"
+                          title={`Delete flow and associated collection`}
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
           {/* Footer */}
-          {flows.length > 0 && (
-            <div className="px-4 py-2 bg-slate-700 border-t border-slate-600">
-              <p className="text-xs text-slate-400">
-                {filteredFlows.length} of {flows.length} flows
-                {selectedFlow && ` • Selected: ${selectedFlow.name}`}
-              </p>
-            </div>
-          )}
+          <div className="px-4 py-2 bg-slate-700 border-t border-slate-600">
+            <p className="text-xs text-slate-400">
+              {filteredFlows.length} of {getCurrentFlows().length} {activeTab === 'public' ? 'public' : 'user'} flows
+              {selectedFlow && ` • Selected: ${selectedFlow.name}`}
+              {showPublicFlows && ` • Total: ${totalFlowsCount} flows`}
+            </p>
+          </div>
         </div>
       )}
 

@@ -61,6 +61,41 @@ class FlowRequests {
   }
 
   /**
+   * Fetches all public flows (no authentication required)
+   * @returns {Promise<Array>} - Promise resolving to an array of public flow objects
+   */
+  async getPublicFlows() {
+    try {
+      const publicFlowsUrl = `${config.api.getFlowsPublicUrl()}`;
+
+      const response = await fetch(publicFlowsUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error fetching public flows: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (Array.isArray(data)) {
+        console.log(`✅ Fetched ${data.length} public flows`);
+        return data;
+      } else {
+        console.error("Unexpected public flows response format:", data);
+        return [];
+      }
+    } catch (error) {
+      console.error("Failed to fetch public flows:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Uploads a flow file to LangFlow via backend
    * @param {File} file - Flow file to upload
    * @param {Object} options - Upload options

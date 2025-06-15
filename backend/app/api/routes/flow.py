@@ -12,6 +12,7 @@ FLOWS_DELETE_ENDPOINT = os.getenv("FLOWS_DELETE_ENDPOINT")
 FLOWS_DELETE_MULTIPLE_ENDPOINT = os.getenv("FLOWS_DELETE_MULTIPLE_ENDPOINT")
 FLOWS_RUN_ENDPOINT = os.getenv("FLOWS_RUN_ENDPOINT")
 FLOWS_VALIDATE_ENDPOINT = os.getenv("FLOWS_VALIDATE_ENDPOINT")
+FLOWS_PUBLIC_ENDPOINT = os.getenv("FLOWS_PUBLIC_ENDPOINT")
 
 router = APIRouter(prefix=FLOWS_BASE_ENDPOINT, tags=["flows"])
 flow_service = FlowService()
@@ -37,6 +38,19 @@ async def get_flows(
         raise HTTPException(status_code=401, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting flows: {str(e)}")
+
+
+@router.get(FLOWS_PUBLIC_ENDPOINT)
+async def get_public_flows() -> List[Dict[str, Any]]:
+    """
+    Get all flows with access_type set to PUBLIC
+    No authentication required - this endpoint is public
+    """
+    try:
+        public_flows = await flow_service.get_public_flows()
+        return public_flows
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting public flows: {str(e)}")
 
 
 @router.get(FLOWS_GET_BY_ID_ENDPOINT)

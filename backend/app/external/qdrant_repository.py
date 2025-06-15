@@ -7,6 +7,12 @@ from qdrant_client.models import Distance, VectorParams
 from ..models.document import DocumentChunk, CollectionInfo
 
 
+def get_collection_name(user_id: str, flow_id: str) -> str:
+    collection_name = f"user_{user_id}_flow_{flow_id}"
+
+    return collection_name
+
+
 class QdrantRepository:
     def __init__(self):
         self.url = os.getenv("QDRANT_INTERNAL_URL", "http://qdrant:6333")
@@ -21,9 +27,10 @@ class QdrantRepository:
         except Exception:
             return False
 
-    async def create_collection(self, collection_name: str, vector_size: int) -> CollectionInfo:
+    async def create_collection(self, user_id: str, flow_id: str, vector_size: int) -> CollectionInfo:
         """Create a new collection"""
         try:
+            collection_name = get_collection_name(user_id, flow_id)
             self.client.create_collection(
                 collection_name=collection_name,
                 vectors_config=VectorParams(
@@ -44,9 +51,10 @@ class QdrantRepository:
         except Exception as e:
             raise Exception(f"Failed to create collection: {str(e)}")
 
-    async def delete_collection(self, collection_name: str) -> bool:
+    async def delete_collection(self, user_id: str, flow_id: str) -> bool:
         """Delete a collection"""
         try:
+            collection_name = get_collection_name(user_id, flow_id)
             collections = self.client.get_collections().collections
             collection_names = [c.name for c in collections]
 
@@ -58,20 +66,22 @@ class QdrantRepository:
         except Exception:
             return False
 
-    async def collection_exists(self, collection_name: str) -> bool:
+    async def collection_exists(self, user_id: str, flow_id: str) -> bool:
         """Check if collection exists"""
         try:
+            collection_name = get_collection_name(user_id, flow_id)
             collections = self.client.get_collections().collections
             return collection_name in [c.name for c in collections]
         except Exception:
             return False
 
-    async def get_collection_info(self, collection_name: str) -> Optional[CollectionInfo]:
+    async def get_collection_info(self, user_id: str, flow_id: str) -> Optional[CollectionInfo]:
         """Get detailed information about a collection"""
         try:
-            if not await self.collection_exists(collection_name):
+            if not await self.collection_exists(user_id, flow_id):
                 return None
 
+            collection_name = get_collection_name(user_id, flow_id)
             collection_info = self.client.get_collection(collection_name)
             return CollectionInfo(
                 name=collection_name,
@@ -84,9 +94,10 @@ class QdrantRepository:
         except Exception as e:
             raise Exception(f"Failed to get collection info: {str(e)}")
 
-    async def upload_documents(self, collection_name: str, chunks: List[DocumentChunk]) -> bool:
+    async def upload_documents(self, user_id: str, flow_id: str, chunks: List[DocumentChunk]) -> bool:
         """Upload document chunks to collection"""
         try:
+            collection_name = get_collection_name(user_id, flow_id)
             points = []
             for chunk in chunks:
                 point_id = str(uuid.uuid4())
@@ -109,9 +120,10 @@ class QdrantRepository:
         except Exception as e:
             raise Exception(f"Failed to upload documents: {str(e)}")
 
-    async def delete_documents_by_file_path(self, collection_name: str, file_path: str) -> int:
+    async def delete_documents_by_file_path(self, user_id: str, flow_id: str, file_path: str) -> int:
         """Delete all documents from a specific file"""
         try:
+            collection_name = get_collection_name(user_id, flow_id)
             # First, find all points with this file path
             response = self.client.scroll(
                 collection_name=collection_name,
@@ -139,9 +151,10 @@ class QdrantRepository:
         except Exception as e:
             raise Exception(f"Failed to delete documents: {str(e)}")
 
-    async def check_file_exists(self, collection_name: str, file_path: str) -> bool:
+    async def check_file_exists(self, user_id: str, flow_id: str, file_path: str) -> bool:
         """Check if file already exists in collection"""
         try:
+            collection_name = get_collection_name(user_id, flow_id)
             response = self.client.scroll(
                 collection_name=collection_name,
                 scroll_filter={
@@ -158,11 +171,13 @@ class QdrantRepository:
         except Exception:
             return False
 
-    async def get_files_in_collection(self, collection_name: str) -> List[Dict[str, Any]]:
+    async def get_files_in_collection(self, user_id: str, flow_id: str) -> List[Dict[str, Any]]:
         """Get all unique files in a collection"""
         try:
-            if not await self.collection_exists(collection_name):
+            if not await self.collection_exists(user_id, flow_id):
                 return []
+
+            collection_name = get_collection_name(user_id, flow_id)
 
             response = self.client.scroll(
                 collection_name=collection_name,

@@ -190,6 +190,7 @@ class MessageService:
         try:
             payload = await self.flow_service.prepare_flow_execution_payload(
                 request=request,
+                user_id=user_id,
                 flow_id=message_request.flow_id,
                 message=message_request.message,
                 session_id=session_id

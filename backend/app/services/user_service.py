@@ -10,11 +10,8 @@ from ..services.flow_service import FlowService
 from ..models.user import (
     UserCreate, UserDeletionResult
 )
-from ..utils.jwt_helper import get_user_token, get_token_expiry
+from ..utils.jwt_helper import get_user_token, get_admin_token, get_user_id_from_token
 
-SUPERUSER_USERNAME = os.getenv("BACKEND_LF_USERNAME")
-SUPERUSER_PASSWORD = os.getenv("BACKEND_LF_PASSWORD")
-TOKEN_EXPIRY_BUFFER = 300
 ACCESS_COOKIE_NAME = os.getenv("ACCESS_COOKIE_NAME")
 REFRESH_COOKIE_NAME = os.getenv("REFRESH_COOKIE_NAME")
 USERNAME_COOKIE_NAME = os.getenv("USERNAME_COOKIE_NAME")
@@ -27,33 +24,10 @@ class UserService:
         self.flow_service = FlowService()
         self._admin_token_cache = {"token": None, "expiry": 0}
 
-    async def _get_admin_token(self) -> Optional[str]:
-        """Get cached admin token or create new one"""
-        current_time = time.time()
-
-        if (self._admin_token_cache["token"] and
-                self._admin_token_cache["expiry"] > current_time + TOKEN_EXPIRY_BUFFER):
-            return self._admin_token_cache["token"]
-
-        token_data = await self.langflow_repo.authenticate_user(
-            SUPERUSER_USERNAME, SUPERUSER_PASSWORD
-        )
-
-        access_token = token_data.get("access_token")
-        if not access_token:
-            raise ValueError("Admin authentication failed")
-
-        expiry = get_token_expiry(access_token)
-        self._admin_token_cache["token"] = access_token
-        self._admin_token_cache["expiry"] = expiry
-
-        print(f"New admin token obtained, expires in {int((expiry - current_time) / 60)} minutes")
-        return access_token
-
     async def create_user(self, user_data: UserCreate) -> UserDeletionResult:
         """Create a new user and activate them"""
         try:
-            admin_token = await self._get_admin_token()
+            admin_token = await get_admin_token(self.langflow_repo)
 
             user_response = await self.langflow_repo.create_user(user_data, admin_token)
             user_id = user_response.get("id")
@@ -299,7 +273,7 @@ class UserService:
                     message="No valid authentication token found"
                 )
 
-            admin_token = await self._get_admin_token()
+            admin_token = await get_admin_token(self.langflow_repo)
 
             cleanup_results = await self._cleanup_user_data_remains(user_token)
 
@@ -345,6 +319,7 @@ class UserService:
                 header_flows=False,
                 get_all=True
             )
+            user_id = get_user_id_from_token(user_token)
 
             cleanup_results["flows_found"] = len(user_flows)
 
@@ -359,8 +334,8 @@ class UserService:
                         print(f"Deleted flow: {flow_id}")
 
                         try:
-                            if await self.qdrant_repo.collection_exists(flow_id):
-                                collection_success = await self.qdrant_repo.delete_collection(flow_id)
+                            if await self.qdrant_repo.collection_exists(user_id, flow_id):
+                                collection_success = await self.qdrant_repo.delete_collection(user_id, flow_id)
                                 if collection_success:
                                     cleanup_results["collections_deleted"] += 1
                                     cleanup_results["deleted_collections"].append(flow_id)
