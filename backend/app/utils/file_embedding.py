@@ -294,7 +294,8 @@ def get_ollama_image_description_from_bytes(image_data: bytes) -> str:
                 description = description.strip()
 
             image_cache.store_description(image_data, description)
-            print(f"Generated and cached new image description (hash: {hashlib.sha256(image_data).hexdigest()[:12]}...)")
+            print(
+                f"Generated and cached new image description (hash: {hashlib.sha256(image_data).hexdigest()[:12]}...)")
 
             return description
 
@@ -313,12 +314,13 @@ def get_ollama_image_description_from_bytes(image_data: bytes) -> str:
 
 def extract_images_from_pdf(file_path: str) -> List[Tuple[bytes, str]]:
     """
-    Extract images from PDF using PyMuPDF
+    Extract images from PDF using PyMuPDF with duplicate detection
 
     Returns:
         List of (image_bytes, description) tuples
     """
     images = []
+    seen_hashes: Set[str] = set()
 
     try:
         doc = fitz.open(file_path)
@@ -335,16 +337,21 @@ def extract_images_from_pdf(file_path: str) -> List[Tuple[bytes, str]]:
                     # Convert to RGB if CMYK
                     if pix.n - pix.alpha < 4:
                         img_data = pix.tobytes("png")
-                        description = get_ollama_image_description_from_bytes(img_data)
-                        images.append((img_data, f"[Image from page {page_num + 1}]: {description}"))
                     else:
                         # Convert CMYK to RGB
                         pix1 = fitz.Pixmap(fitz.csRGB, pix)
                         img_data = pix1.tobytes("png")
-                        description = get_ollama_image_description_from_bytes(img_data)
-                        images.append((img_data, f"[Image from page {page_num + 1}]: {description}"))
                         pix1 = None
 
+                    img_hash = compute_image_hash(img_data)
+                    if img_hash in seen_hashes:
+                        print(f"Skipping duplicate PDF image on page {page_num + 1}")
+                        pix = None
+                        continue
+                    seen_hashes.add(img_hash)
+
+                    description = get_ollama_image_description_from_bytes(img_data)
+                    images.append((img_data, f"[Image from page {page_num + 1}]: {description}"))
                     pix = None
 
                 except Exception as e:
@@ -405,12 +412,13 @@ def extract_images_from_docx(file_path: str) -> List[Tuple[bytes, str]]:
 
 def extract_images_from_pptx(file_path: str) -> List[Tuple[bytes, str]]:
     """
-    Extract images from PowerPoint presentation
+    Extract images from PowerPoint presentation with duplicate detection
 
     Returns:
         List of (image_bytes, description) tuples
     """
     images = []
+    seen_hashes: Set[str] = set()
 
     try:
         presentation = Presentation(file_path)
@@ -421,6 +429,14 @@ def extract_images_from_pptx(file_path: str) -> List[Tuple[bytes, str]]:
                     # Check if shape has an image
                     if hasattr(shape, "image") and shape.image:
                         img_data = shape.image.blob
+
+                        img_hash = compute_image_hash(img_data)
+                        if img_hash in seen_hashes:
+                            print(f"Skipping duplicate image on slide {slide_num}")
+                            continue
+                        seen_hashes.add(img_hash)
+
+                        # Generate description for new image
                         description = get_ollama_image_description_from_bytes(img_data)
                         images.append((img_data, f"[Image from slide {slide_num}]: {description}"))
 
@@ -436,12 +452,13 @@ def extract_images_from_pptx(file_path: str) -> List[Tuple[bytes, str]]:
 
 def extract_images_from_xlsx(file_path: str) -> List[Tuple[bytes, str]]:
     """
-    Extract images from Excel workbook
+    Extract images from Excel workbook with duplicate detection
 
     Returns:
         List of (image_bytes, description) tuples
     """
     images = []
+    seen_hashes: Set[str] = set()
 
     try:
         # Excel files are zip archives, we can extract images directly
@@ -454,8 +471,17 @@ def extract_images_from_xlsx(file_path: str) -> List[Tuple[bytes, str]]:
                            ['.png', '.jpg', '.jpeg', '.gif', '.bmp']):
                         try:
                             img_data = zip_file.read(file_info.filename)
+
+                            img_hash = compute_image_hash(img_data)
+                            if img_hash in seen_hashes:
+                                print(f"Skipping duplicate Excel image: {file_info.filename}")
+                                continue
+                            seen_hashes.add(img_hash)
+
+                            # Generate description for new image
                             description = get_ollama_image_description_from_bytes(img_data)
                             images.append((img_data, f"[Excel embedded image]: {description}"))
+
                         except Exception as e:
                             print(f"Error processing Excel image {file_info.filename}: {e}")
                             continue
