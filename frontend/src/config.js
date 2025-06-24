@@ -43,6 +43,8 @@ const COLLECTIONS_LIST_FILES_ENDPOINT = process.env.REACT_APP_COLLECTIONS_LIST_F
 const COLLECTIONS_UPLOAD_TO_COLLECTION_ENDPOINT = process.env.REACT_APP_COLLECTIONS_UPLOAD_TO_COLLECTION_ENDPOINT || '/{flow_id}/files/upload';
 const COLLECTIONS_DELETE_FROM_COLLECTION_ENDPOINT = process.env.REACT_APP_COLLECTIONS_DELETE_FROM_COLLECTION_ENDPOINT || '/{flow_id}/files';
 const COLLECTIONS_PROCESSING_ENDPOINT = process.env.REACT_APP_COLLECTIONS_PROCESSING_ENDPOINT || '/processing';
+const COLLECTIONS_DELETE_PROCESSING_ENDPOINT = process.env.REACT_APP_COLLECTIONS_DELETE_PROCESSING_ENDPOINT || '/{flow_id}/processing/{file_id}';
+const FILE_POLLING_INTERVAL = process.env.FILE_POLLING_INTERVAL || 10000;
 
 // Cookie configuration
 const ACCESS_COOKIE_NAME = process.env.REACT_APP_ACCESS_COOKIE_NAME || 'dashboard_access_token';
@@ -103,11 +105,13 @@ const config = {
     getCollectionDeleteUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}${replacePlaceholders(COLLECTIONS_DELETE_ENDPOINT, { flow_id: flowId })}`,
     getCollectionUploadUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}${replacePlaceholders(COLLECTIONS_UPLOAD_TO_COLLECTION_ENDPOINT, { flow_id: flowId })}`,
     getCollectionFileDeleteUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}${replacePlaceholders(COLLECTIONS_DELETE_FROM_COLLECTION_ENDPOINT, { flow_id: flowId })}`,
+    getCollectionProcessingDeleteUrl: (flowId, fileId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}${replacePlaceholders(COLLECTIONS_DELETE_PROCESSING_ENDPOINT, { flow_id: flowId, file_id: fileId })}`,
 
     getCollectionFilesUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}${replacePlaceholders(COLLECTIONS_LIST_FILES_ENDPOINT, { flow_id: flowId })}`,
     getCollectionProcessingUrl: (flowId) => `${BACKEND_API}${COLLECTIONS_BASE_ENDPOINT}/${flowId}${COLLECTIONS_PROCESSING_ENDPOINT}`,
   },
 
+  filePollingInterval: FILE_POLLING_INTERVAL,
   version: APP_VERSION,
 };
 

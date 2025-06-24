@@ -1,6 +1,6 @@
 from datetime import datetime, UTC
 import threading
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 
 class ProcessingFileTracker:
@@ -8,6 +8,10 @@ class ProcessingFileTracker:
     def __init__(self):
         self._processing_files: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.Lock()
+
+    def get_file_info(self, file_id: str) -> Optional[Dict[str, Any]]:
+        """Get file information by file_id"""
+        return self._processing_files.get(file_id)
 
     def add_file(self, file_id: str, file_info: Dict[str, Any]) -> None:
         """Add a file to the processing tracker"""

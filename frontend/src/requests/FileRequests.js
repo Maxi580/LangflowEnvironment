@@ -248,6 +248,42 @@ class FileRequests {
   }
 
   /**
+   * Deletes a processing file by file_id
+   * @param {string} flowId - Flow ID (collection identifier)
+   * @param {string} fileId - ID of the processing file to delete
+   * @returns {Promise<Object>} - Result of the deletion operation
+   */
+  async deleteProcessingFile(flowId, fileId) {
+    if (!flowId) {
+      throw new Error("Flow ID is required");
+    }
+
+    if (!fileId) {
+      throw new Error("File ID is required");
+    }
+
+    try {
+      const response = await TokenRefreshService.authenticatedFetch(
+        config.api.getCollectionProcessingDeleteUrl(flowId, fileId),
+        {
+          method: 'DELETE'
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Failed to delete processing file: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error deleting processing file:', error);
+      throw error;
+    }
+  }
+
+
+  /**
    * Deletes a file from a collection
    * @param {string} filePath - Path to the file to delete
    * @param {string} flowId - Flow ID (collection identifier)
@@ -263,7 +299,6 @@ class FileRequests {
     }
 
     try {
-      // URL: DELETE /api/collections/{flow_id}/files?file_path=...
       const url = new URL(config.api.getCollectionFileDeleteUrl(flowId));
       url.searchParams.append('file_path', filePath);
 

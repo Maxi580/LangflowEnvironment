@@ -737,6 +737,64 @@ class FlowService:
             except:
                 pass
 
+    async def delete_processing_file(
+            self,
+            request: Request,
+            flow_id: str,
+            file_id: str
+    ) -> Dict[str, Any]:
+        """
+        Delete a processing file by file_id and clean up associated resources
+        This handles files that are currently being processed or have failed processing
+        """
+        user_id = await get_user_id_from_request(request)
+        if not user_id:
+            raise ValueError("No valid authentication token found")
+
+        if not flow_id.strip():
+            raise ValueError("Flow ID cannot be empty")
+
+        if not file_id.strip():
+            raise ValueError("File ID cannot be empty")
+
+        has_access = await self.validate_user_flow_access(request, flow_id)
+        if not has_access:
+            raise ValueError(f"Access denied: You don't have permission to access flow '{flow_id}'")
+
+        if not processing_tracker.is_processing(file_id):
+            raise ValueError(f"Processing file with ID '{file_id}' not found")
+
+        file_info = processing_tracker.get_file_info(file_id)
+        if not file_info:
+            raise ValueError(f"Could not retrieve information for file ID '{file_id}'")
+
+        if file_info.get("flow_id") != flow_id:
+            raise ValueError(f"File '{file_id}' does not belong to flow '{flow_id}'")
+
+        physical_file_deleted = False
+        file_path = file_info.get("file_path")
+        if file_path:
+            file_path_obj = Path(file_path)
+            if file_path_obj.exists():
+                try:
+                    file_path_obj.unlink()
+                    print(f"Deleted physical processing file: {file_path_obj}")
+                    physical_file_deleted = True
+                except Exception as e:
+                    print(f"Warning: Could not delete physical processing file {file_path_obj}: {e}")
+
+        processing_tracker.remove_file(file_id)
+
+        return {
+            "success": True,
+            "message": f"Processing file '{file_info.get('file_name', file_id)}' deleted successfully",
+            "file_id": file_id,
+            "file_name": file_info.get("file_name"),
+            "flow_id": flow_id,
+            "physical_file_deleted": physical_file_deleted,
+            "was_failed": file_info.get("status") == "failed"
+        }
+
     async def delete_file_from_collection(
             self,
             request: Request,

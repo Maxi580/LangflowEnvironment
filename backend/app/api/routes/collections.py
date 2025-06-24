@@ -17,6 +17,8 @@ COLLECTIONS_LIST_FILES_ENDPOINT = os.getenv("COLLECTIONS_LIST_FILES_ENDPOINT")
 COLLECTIONS_UPLOAD_TO_COLLECTION_ENDPOINT = os.getenv("COLLECTIONS_UPLOAD_TO_COLLECTION_ENDPOINT")
 COLLECTIONS_DELETE_FROM_COLLECTION_ENDPOINT = os.getenv("COLLECTIONS_DELETE_FROM_COLLECTION_ENDPOINT")
 COLLECTIONS_PROCESSING_ENDPOINT = os.getenv("COLLECTIONS_PROCESSING_ENDPOINT")
+COLLECTIONS_DELETE_PROCESSING_ENDPOINT = os.getenv("COLLECTIONS_DELETE_PROCESSING_ENDPOINT")
+
 
 router = APIRouter(prefix=COLLECTIONS_BASE_ENDPOINT, tags=["collections"])
 flow_service = FlowService()
@@ -173,6 +175,29 @@ async def upload_file_to_collection(
         raise HTTPException(status_code=503, detail="Qdrant service is not available")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
+
+@router.delete(COLLECTIONS_DELETE_PROCESSING_ENDPOINT)
+async def delete_processing_file(
+        request: Request,
+        flow_id: str,
+        file_id: str
+) -> Dict[str, Any]:
+    """Delete a processing file by file_id"""
+    try:
+        result = await flow_service.delete_processing_file(request, flow_id, file_id)
+        return result
+    except ValueError as e:
+        error_msg = str(e)
+        if "authentication" in error_msg.lower() or "token" in error_msg.lower():
+            raise HTTPException(status_code=401, detail=error_msg)
+        elif "access denied" in error_msg.lower() or "permission" in error_msg.lower():
+            raise HTTPException(status_code=403, detail=error_msg)
+        elif "not found" in error_msg.lower():
+            raise HTTPException(status_code=404, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting processing file: {str(e)}")
 
 
 @router.delete(COLLECTIONS_DELETE_FROM_COLLECTION_ENDPOINT)
