@@ -1,3 +1,4 @@
+import hashlib
 import os
 import time
 import base64
@@ -12,6 +13,8 @@ from pptx import Presentation
 from openpyxl import load_workbook
 import requests
 from typing import List, Dict, Any, Optional, Tuple
+
+from .image_description_cache import ImageDescriptionCache
 
 OLLAMA_URL = os.getenv("OLLAMA_INTERNAL_URL")
 DEFAULT_EMBEDDING_MODEL = os.getenv("DEFAULT_EMBEDDING_MODEL")
@@ -254,8 +257,7 @@ def get_available_models() -> Dict[str, List[str]]:
 
 def get_ollama_image_description_from_bytes(image_data: bytes) -> str:
     """
-    Get image description from image bytes using your existing vision model helper
-    This is a wrapper around the existing get_ollama_image_description function
+    Get image description from image bytes with caching
 
     Args:
         image_data: Raw image bytes
@@ -263,6 +265,11 @@ def get_ollama_image_description_from_bytes(image_data: bytes) -> str:
     Returns:
         String description of the image
     """
+    cached_description = image_cache.get_description(image_data)
+    if cached_description:
+        print(f"Using cached image description (hash: {hashlib.sha256(image_data).hexdigest()[:12]}...)")
+        return cached_description
+
     try:
         if image_data.startswith(b'\xff\xd8\xff'):
             suffix = '.jpg'
@@ -283,9 +290,14 @@ def get_ollama_image_description_from_bytes(image_data: bytes) -> str:
             description = get_image_description(temp_file_path)
 
             if not description or description.strip() == "":
-                return "No description available for this image."
+                description = "No description available for this image."
+            else:
+                description = description.strip()
 
-            return description.strip()
+            image_cache.store_description(image_data, description)
+            print(f"Generated and cached new image description (hash: {hashlib.sha256(image_data).hexdigest()[:12]}...)")
+
+            return description
 
         finally:
             try:
@@ -295,7 +307,9 @@ def get_ollama_image_description_from_bytes(image_data: bytes) -> str:
 
     except Exception as e:
         print(f"Error getting image description from bytes: {e}")
-        return "Failed to describe this image."
+        error_description = "Failed to describe this image."
+        image_cache.store_description(image_data, error_description)
+        return error_description
 
 
 def extract_images_from_pdf(file_path: str) -> List[Tuple[bytes, str]]:
@@ -727,3 +741,6 @@ def read_file_content(file_path: str, include_images: bool = True) -> Tuple[str,
         return description, 'image'
     else:
         raise ValueError(f"Unsupported file type '{file_type}' for {file_path}")
+
+
+image_cache = ImageDescriptionCache(max_size=1000)
