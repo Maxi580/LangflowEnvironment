@@ -12,9 +12,9 @@ import mimetypes
 from pptx import Presentation
 from openpyxl import load_workbook
 import requests
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Set
 
-from .image_description_cache import ImageDescriptionCache
+from .image_description_cache import ImageDescriptionCache, compute_image_hash
 
 OLLAMA_URL = os.getenv("OLLAMA_INTERNAL_URL")
 DEFAULT_EMBEDDING_MODEL = os.getenv("DEFAULT_EMBEDDING_MODEL")
@@ -267,7 +267,6 @@ def get_ollama_image_description_from_bytes(image_data: bytes) -> str:
     """
     cached_description = image_cache.get_description(image_data)
     if cached_description:
-        print(f"Using cached image description (hash: {hashlib.sha256(image_data).hexdigest()[:12]}...)")
         return cached_description
 
     try:
@@ -368,6 +367,7 @@ def extract_images_from_docx(file_path: str) -> List[Tuple[bytes, str]]:
         List of (image_bytes, description) tuples
     """
     images = []
+    seen_hashes: Set[str] = set()
 
     try:
         # Word documents are also zip archives
@@ -380,10 +380,19 @@ def extract_images_from_docx(file_path: str) -> List[Tuple[bytes, str]]:
                            ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.emf', '.wmf']):
                         try:
                             img_data = zip_file.read(file_info.filename)
-                            # Skip EMF and WMF files as they're harder to process
-                            if not file_info.filename.lower().endswith(('.emf', '.wmf')):
-                                description = get_ollama_image_description_from_bytes(img_data)
-                                images.append((img_data, f"[Word embedded image]: {description}"))
+
+                            if file_info.filename.lower().endswith(('.emf', '.wmf')):
+                                continue
+
+                            img_hash = compute_image_hash(img_data)
+                            if img_hash in seen_hashes:
+                                print(f"Skipping duplicate image: {file_info.filename}")
+                                continue
+                            seen_hashes.add(img_hash)
+
+                            description = get_ollama_image_description_from_bytes(img_data)
+                            images.append((img_data, f"[Word embedded image]: {description}"))
+
                         except Exception as e:
                             print(f"Error processing Word image {file_info.filename}: {e}")
                             continue

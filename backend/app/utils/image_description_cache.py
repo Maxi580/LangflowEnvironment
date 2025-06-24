@@ -4,6 +4,11 @@ from typing import Dict, Optional
 from collections import OrderedDict
 
 
+def compute_image_hash(image_data: bytes) -> str:
+    """Compute SHA-256 hash of image data"""
+    return hashlib.sha256(image_data).hexdigest()
+
+
 class ImageDescriptionCache:
     def __init__(self, max_size: int = 1000):
         self._cache: OrderedDict[str, str] = OrderedDict()
@@ -12,13 +17,9 @@ class ImageDescriptionCache:
         self._hits = 0
         self._misses = 0
 
-    def _compute_image_hash(self, image_data: bytes) -> str:
-        """Compute SHA-256 hash of image data"""
-        return hashlib.sha256(image_data).hexdigest()
-
     def get_description(self, image_data: bytes) -> Optional[str]:
         """Get cached description for image data and move to end (most recent)"""
-        image_hash = self._compute_image_hash(image_data)
+        image_hash = compute_image_hash(image_data)
         with self._lock:
             if image_hash in self._cache:
                 # Move to end (most recently used)
@@ -32,7 +33,7 @@ class ImageDescriptionCache:
 
     def store_description(self, image_data: bytes, description: str) -> None:
         """Store description for image data"""
-        image_hash = self._compute_image_hash(image_data)
+        image_hash = compute_image_hash(image_data)
         with self._lock:
             if image_hash in self._cache:
                 self._cache.pop(image_hash)
