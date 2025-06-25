@@ -24,9 +24,6 @@ OLLAMA_EMBEDDINGS_ENDPOINT = os.getenv("OLLAMA_EMBEDDINGS_ENDPOINT")
 OLLAMA_GENERATE_ENDPOINT = os.getenv("OLLAMA_GENERATE_ENDPOINT")
 OLLAMA_TAGS_ENDPOINT = os.getenv("OLLAMA_TAGS_ENDPOINT")
 
-MAX_IMAGE_WIDTH = os.getenv("MAX_IMAGE_WIDTH")
-MAX_IMAGE_HEIGHT = os.getenv("MAX_IMAGE_HEIGHT")
-JPEG_QUALITY = os.getenv("JPEG_QUALITY")
 IMAGE_TIMEOUT = int(os.getenv("IMAGE_TIMEOUT"))
 
 
@@ -104,41 +101,6 @@ def get_text_embedding(text: str) -> List[float]:
         raise ValueError(f"Unexpected error getting embedding from model {model}: {str(e)}")
 
 
-def resize_image_for_vision(image_path: str) -> bytes:
-    """
-    Resize and optimize image for faster vision model processing
-
-    Args:
-        image_path: Path to the image file
-
-    Returns:
-        Optimized image data as bytes
-    """
-    try:
-        with Image.open(image_path) as img:
-            # Convert to RGB if necessary (handles RGBA, grayscale, etc.)
-            if img.mode not in ('RGB', 'L'):
-                img = img.convert('RGB')
-
-            # Get original size
-            original_size = img.size
-
-            # Resize if image is larger than max size
-            if img.size[0] > MAX_IMAGE_WIDTH or img.size[1] > MAX_IMAGE_HEIGHT:
-                # Use thumbnail to maintain aspect ratio
-                img.thumbnail((MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT), Image.Resampling.LANCZOS)
-                print(f"Resized image from {original_size} to {img.size}")
-
-            # Convert to bytes with compression
-            output = io.BytesIO()
-            img.save(output, format='JPEG', quality=JPEG_QUALITY, optimize=True)
-            return output.getvalue()
-
-    except Exception as e:
-        # Fallback: read original file if resize fails
-        print(f"Warning: Could not resize image {image_path}: {e}")
-        with open(image_path, "rb") as f:
-            return f.read()
 
 
 def get_image_description(image_path: str, prompt: str = None) -> str:
@@ -163,11 +125,18 @@ def get_image_description(image_path: str, prompt: str = None) -> str:
     model = DEFAULT_VISION_MODEL
 
     if prompt is None:
-        prompt = "Describe this image in detail, including objects, people, text, colors, and setting."
+        prompt = """Describe this image in detail, including texts, objects, people, text, colors, and setting.
+                    The Focus in on the text however"""
 
     try:
-        image_data = resize_image_for_vision(image_path)
-        image_b64 = base64.b64encode(image_data).decode('utf-8')
+        with open(image_path, "rb") as image_file:
+            image_data = image_file.read()
+
+            cached_description = image_cache.get_description(image_data)
+            if cached_description:
+                return cached_description
+
+            image_b64 = base64.b64encode(image_data).decode('utf-8')
     except Exception as e:
         raise ValueError(f"Failed to read image file {image_path}: {str(e)}")
 
@@ -185,6 +154,7 @@ def get_image_description(image_path: str, prompt: str = None) -> str:
 
         result = response.json()
         description = result.get("response", "").strip()
+        image_cache.store_description(image_data, description)
 
         if not description:
             raise ValueError("Empty response from vision model")

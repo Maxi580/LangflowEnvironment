@@ -22,7 +22,6 @@ class ImageDescriptionCache:
         image_hash = compute_image_hash(image_data)
         with self._lock:
             if image_hash in self._cache:
-                # Move to end (most recently used)
                 description = self._cache.pop(image_hash)
                 self._cache[image_hash] = description
                 self._hits += 1

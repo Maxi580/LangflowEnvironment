@@ -123,31 +123,43 @@ class QdrantRepository:
         """Delete all documents from a specific file"""
         try:
             collection_name = get_collection_name(user_id, flow_id)
-            # First, find all points with this file path
-            response = self.client.scroll(
-                collection_name=collection_name,
-                scroll_filter={
-                    "must": [
-                        {
-                            "key": "metadata.file_path",
-                            "match": {"value": file_path}
-                        }
-                    ]
-                },
-                with_payload=False,
-                with_vectors=False
-            )
+            total_deleted = 0
 
-            point_ids = [point.id for point in response[0]]
+            while True:
+                points, next_page_offset = self.client.scroll(
+                    collection_name=collection_name,
+                    scroll_filter={
+                        "must": [
+                            {
+                                "key": "metadata.file_path",
+                                "match": {"value": file_path}
+                            }
+                        ]
+                    },
+                    with_payload=False,
+                    with_vectors=False,
+                    limit=100
+                )
 
-            if point_ids:
+                if not points:
+                    break
+                point_ids = [point.id for point in points]
+
                 self.client.delete(
                     collection_name=collection_name,
                     points_selector=point_ids
                 )
 
-            return len(point_ids)
+                total_deleted += len(point_ids)
+                print(f"Deleted batch of {len(point_ids)} points")
+
+                if len(points) < 100:
+                    break
+
+            return total_deleted
+
         except Exception as e:
+            print(f"Error in delete_documents_by_file_path: {e}")
             raise Exception(f"Failed to delete documents: {str(e)}")
 
     async def check_file_exists(self, user_id: str, flow_id: str, file_path: str) -> bool:

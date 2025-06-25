@@ -535,7 +535,6 @@ class FlowService:
         if not has_access:
             raise ValueError(f"Access denied: You don't have permission to access flow '{flow_id}'")
 
-        # Ensure collection exists
         if not await self.qdrant_repo.collection_exists(user_id, flow_id):
             raise ValueError(f"Collection for flow '{flow_id}' not found. Please create the collection first.")
 
