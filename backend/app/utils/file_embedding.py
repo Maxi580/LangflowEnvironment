@@ -126,7 +126,8 @@ def get_image_description(image_path: str, prompt: str = None) -> str:
 
     if prompt is None:
         prompt = """Describe this image in detail, including texts, objects, people, text, colors, and setting.
-                    The Focus in on the text however"""
+                    The Focus in on the text however. You are a image description agent. The descriptions are used
+                    as context."""
 
     try:
         with open(image_path, "rb") as image_file:
