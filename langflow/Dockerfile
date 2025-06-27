@@ -20,6 +20,9 @@ RUN . .venv/bin/activate && uv pip install \
 
 RUN . .venv/bin/activate && uv pip install langflow -U
 
+
+COPY google_generative_ai.py /app/.venv/lib/python3.11/site-packages/langflow/components/models/google_generative_ai.py
+
 EXPOSE ${LANGFLOW_PORT:-7860}
 
 CMD ["/bin/bash", "-c", "source .venv/bin/activate && uv run langflow run"]
