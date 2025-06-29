@@ -2,6 +2,8 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
+from .message import GeneratedFileData
+
 
 class FlowUpload(BaseModel):
     """Request model for uploading a flow"""
@@ -54,7 +56,7 @@ class FlowExecutionResult(BaseModel):
     flow_id: str
     session_id: str
     response: str
-    raw_response: Optional[Dict[str, Any]] = None
+    generated_file: Optional[GeneratedFileData] = None
     execution_time: Optional[float] = None
     error: Optional[str] = None
 

@@ -212,9 +212,9 @@ class MessageService:
             response = MessageResponse(
                 success=True,
                 response=execution_result.response,
+                generated_file=execution_result.generated_file,
                 session_id=session_id,
                 flow_id=message_request.flow_id,
-                raw_response=execution_result.raw_response,
                 timestamp=datetime.utcnow()
             )
 

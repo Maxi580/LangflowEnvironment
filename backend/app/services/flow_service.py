@@ -380,7 +380,7 @@ class FlowService:
                 flow_id=flow_id,
                 session_id=payload.get("session_id", ""),
                 response=response.extracted_message,
-                raw_response=response.raw_response
+                generated_file=response.generated_file,
             )
 
         except Exception as e:

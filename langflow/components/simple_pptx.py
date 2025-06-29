@@ -5,6 +5,11 @@ from pptx import Presentation
 import tempfile
 import base64
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+PPTX_MAGIC_BYTES = os.getenv("PPTX_MAGIC_BYTES")
 
 
 class SimplePowerPointComponent(Component):
@@ -60,18 +65,14 @@ class SimplePowerPointComponent(Component):
 
             filename = "langflow_presentation.pptx"
 
-            text_response = f"""✅ PowerPoint presentation created successfully!
+            text_response = f"""PowerPoint presentation created successfully!
 
-📄 **File:** {filename}
-📊 **Content:** "{self.slide_text}"
-📏 **Size:** {len(file_content):,} bytes
-
-<GENERATED_PPTX>
+<{PPTX_MAGIC_BYTES}>
 filename:{filename}
 content_type:application/vnd.openxmlformats-officedocument.presentationml.presentation
 size:{len(file_content)}
 data:{base64_content}
-</GENERATED_PPTX>"""
+</{PPTX_MAGIC_BYTES}>"""
 
             return Data(data={"text": text_response})
 

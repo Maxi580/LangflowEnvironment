@@ -4,27 +4,31 @@ from datetime import datetime
 
 
 class MessageRequest(BaseModel):
-    """Request model for sending a message to a flow"""
     message: str
     flow_id: str
     session_id: Optional[str] = None
 
 
+class GeneratedFileData(BaseModel):
+    filename: str
+    content_type: str
+    size: int
+    base64_data: str
+
+
 class MessageResponse(BaseModel):
-    """Response model for message sending"""
     success: bool
     response: str
+    generated_file: Optional[GeneratedFileData] = None
     session_id: str
     flow_id: str
-    raw_response: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     timestamp: Optional[datetime] = None
 
 
 class LangflowMessageResponse(BaseModel):
-    """Raw response from Langflow API"""
-    raw_response: Dict[str, Any]
     extracted_message: str
+    generated_file: Optional[GeneratedFileData] = None
 
 
 class ChatSession(BaseModel):

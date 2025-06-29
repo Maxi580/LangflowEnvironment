@@ -5,10 +5,6 @@ import TokenRefreshService from './TokenRefreshRequests';
  * Enhanced service for managing LangFlow flows with authentication
  */
 class FlowRequests {
-  constructor() {
-    this.BACKEND_BASE_URL = config.api.backendUrl;
-  }
-
   /**
    * Fetches all available flows from the LangFlow API with authentication
    * @param {Object} params - Query parameters

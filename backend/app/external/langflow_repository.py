@@ -3,8 +3,8 @@ import json
 import os
 from typing import Dict, Any, List, Optional
 from ..models.user import UserCreate
-from ..models.message import LangflowMessageResponse
-from ..utils.message_parsing import extract_bot_response
+from ..models.message import LangflowMessageResponse, GeneratedFileData
+from ..utils.message_parsing import extract_bot_response_with_files
 
 
 class LangflowRepository:
@@ -231,11 +231,20 @@ class LangflowRepository:
             raise Exception(f"Flow execution failed: {response.text}")
 
         response_data = response.json()
-        extracted_message = extract_bot_response(response_data)
+        extracted_message, file_data = extract_bot_response_with_files(response_data)
+
+        generated_file = None
+        if file_data:
+            generated_file = GeneratedFileData(
+                filename=file_data["filename"],
+                content_type=file_data["content_type"],
+                size=file_data["size"],
+                base64_data=file_data["base64_data"]
+            )
 
         return LangflowMessageResponse(
-            raw_response=response_data,
-            extracted_message=extracted_message
+            extracted_message=extracted_message,
+            generated_file=generated_file
         )
 
     async def create_api_key(self, token: str, name: str, description: str = "") -> Dict[str, Any]:

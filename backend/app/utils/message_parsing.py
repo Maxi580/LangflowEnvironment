@@ -1,4 +1,45 @@
-from typing import Dict, Any
+import re
+import base64
+import os
+from typing import Dict, Any, Optional, Tuple
+
+PPTX_MAGIC_BYTES = os.getenv("PPTX_MAGIC_BYTES")
+
+
+def extract_generated_files(text: str) -> Tuple[str, Optional[Dict[str, Any]]]:
+    pptx_pattern = rf'<{PPTX_MAGIC_BYTES}>\s*filename:([^\n]+)\s*content_type:([^\n]+)\s*size:(\d+)\s*data:([^\n<]+)\s*</{PPTX_MAGIC_BYTES}>'
+
+    match = re.search(pptx_pattern, text, re.MULTILINE | re.DOTALL)
+
+    if not match:
+        return text, None
+
+    filename = match.group(1).strip()
+    content_type = match.group(2).strip()
+    size = int(match.group(3).strip())
+    base64_data = match.group(4).strip()
+
+    try:
+        file_content = base64.b64decode(base64_data)
+
+        if len(file_content) != size:
+            print(f"Warning: File size mismatch. Expected {size}, got {len(file_content)}")
+
+        file_data = {
+            "filename": filename,
+            "content_type": content_type,
+            "size": size,
+            "content": file_content,
+            "base64_data": base64_data
+        }
+
+        cleaned_text = re.sub(pptx_pattern, '', text, flags=re.MULTILINE | re.DOTALL).strip()
+
+        return cleaned_text, file_data
+
+    except Exception as e:
+        print(f"Error parsing generated file: {e}")
+        return text, None
 
 
 def extract_bot_response(data: Dict[str, Any]) -> str:
@@ -75,3 +116,22 @@ def extract_bot_response(data: Dict[str, Any]) -> str:
     except Exception as err:
         print(f"Error extracting bot response: {err}")
         return "Failed to parse response from the agent."
+
+
+def extract_bot_response_with_files(data: Dict[str, Any]) -> Tuple[str, Optional[Dict[str, Any]]]:
+    """
+    Enhanced version that returns both the cleaned text and file data
+
+    Returns:
+        (response_text, file_data) where file_data is None if no files found
+    """
+    try:
+        raw_response = extract_bot_response(data)
+
+        cleaned_text, file_data = extract_generated_files(raw_response)
+
+        return cleaned_text, file_data
+
+    except Exception as err:
+        print(f"Error extracting bot response with files: {err}")
+        return "Failed to parse response from the agent.", None

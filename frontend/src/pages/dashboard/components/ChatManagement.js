@@ -233,6 +233,77 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => 
     const isSystem = message.sender === 'system';
     const isError = message.sender === 'error';
     const hasAttachments = message.metadata?.attachedFiles?.length > 0;
+    const hasGeneratedFile = message.metadata?.generatedFile;
+
+    const createDownloadUrl = (generatedFile) => {
+      try {
+        const byteCharacters = atob(generatedFile.base64_data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: generatedFile.content_type });
+        return URL.createObjectURL(blob);
+      } catch (error) {
+        console.error('Error creating download URL:', error);
+        return null;
+      }
+    };
+
+    const handleDownload = (generatedFile) => {
+      const downloadUrl = createDownloadUrl(generatedFile);
+      if (downloadUrl) {
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = generatedFile.filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+      }
+    };
+
+    const getFileTypeIcon = (filename, contentType) => {
+      const ext = filename.split('.').pop()?.toLowerCase();
+
+      if (contentType?.includes('presentation') || ext === 'pptx') {
+        return (
+          <svg className="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        );
+      } else if (contentType?.includes('pdf') || ext === 'pdf') {
+        return (
+          <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          </svg>
+        );
+      } else if (contentType?.includes('spreadsheet') || ext === 'xlsx') {
+        return (
+          <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M9 17V7m0 10a2 2 0 01-2-2V5a2 2 0 012-2h6l2 2v8a2 2 0 01-2 2H9zm3-10v4m3-4v4" />
+          </svg>
+        );
+      } else if (contentType?.includes('image/')) {
+        return (
+          <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        );
+      }
+
+      return (
+        <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      );
+    };
 
     return (
       <div
@@ -257,6 +328,7 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => 
             {message.text}
           </div>
 
+          {/* User attached files */}
           {hasAttachments && (
             <div className="mt-2 pt-2 border-t border-blue-500 opacity-75">
               <div className="text-xs mb-1">📎 Attached files:</div>
@@ -266,6 +338,41 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => 
                   <span>{file.name} ({formatFileSize(file.size)})</span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Generated files from bot */}
+          {hasGeneratedFile && (
+            <div className="mt-3 pt-2 border-t border-slate-500">
+              <div className="text-xs mb-2 text-slate-300">📄 Generated file:</div>
+              <div className="bg-slate-600 rounded-lg p-3 hover:bg-slate-550 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    {getFileTypeIcon(hasGeneratedFile.filename, hasGeneratedFile.content_type)}
+                    <div>
+                      <div className="text-sm font-medium text-white">
+                        {hasGeneratedFile.filename}
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        {formatFileSize(hasGeneratedFile.size)} • {hasGeneratedFile.content_type.split('/').pop().toUpperCase()}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleDownload(hasGeneratedFile)}
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs
+                             transition-colors flex items-center space-x-1"
+                    title="Download file"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Download</span>
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
