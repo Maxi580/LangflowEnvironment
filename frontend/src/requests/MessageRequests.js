@@ -181,7 +181,6 @@ class MessageService {
 
       return createMessage(responseData.response, 'bot', {
         sessionId: responseData.session_id,
-        rawResponse: responseData.raw_response,
         flowId,
         processedFiles: responseData.processed_files || [],
         generatedFile: generatedFile
