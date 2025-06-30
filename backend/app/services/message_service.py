@@ -53,12 +53,6 @@ class MessageService:
 
         result = await self.send_message_to_flow(request, enhanced_message_request)
 
-        if attached_files:
-            file_info = self._get_file_processing_info(attached_files)
-            if result.raw_response is None:
-                result.raw_response = {}
-            result.raw_response.update(file_info)
-
         return result
 
     def _prepare_message_request(
@@ -161,21 +155,6 @@ class MessageService:
             error_msg = f"Could not read file '{file.filename}': {str(e)}"
             return f"\n\n--- FILE: {file.filename} (READ FAILED) ---\n{error_msg}\n"
 
-    def _get_file_processing_info(self, attached_files: List[UploadFile]) -> Dict[str, Any]:
-        """Get file processing information for response"""
-        processed_files_info = []
-        for file in attached_files:
-            if file.filename:
-                processed_files_info.append({
-                    "filename": file.filename,
-                    "size": file.size if hasattr(file, 'size') else 0,
-                    "content_type": file.content_type if hasattr(file, 'content_type') else "unknown"
-                })
-
-        return {
-            "processed_files": processed_files_info,
-            "files_processed_count": len(processed_files_info)
-        }
 
     async def send_message_to_flow(self, request: Request, message_request: MessageRequest) -> MessageResponse:
         """Send a message to a flow and return the response"""
