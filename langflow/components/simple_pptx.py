@@ -74,19 +74,16 @@ class AtosTemplatePowerPointComponent(Component):
             if hasattr(shape, "text_frame"):
                 text_frame = shape.text_frame
 
-                # Check and replace text in each paragraph
                 for paragraph in text_frame.paragraphs:
                     for run in paragraph.runs:
                         original_text = run.text
 
-                        # Replace each placeholder
                         for placeholder, replacement in replacements.items():
                             if placeholder in run.text:
                                 run.text = run.text.replace(placeholder, replacement)
                                 replacements_made += 1
                                 print(f"✓ Replaced '{placeholder}' with '{replacement[:30]}...'")
 
-            # Also check tables if they exist
             elif hasattr(shape, "table"):
                 table = shape.table
                 for row in table.rows:
