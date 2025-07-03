@@ -47,28 +47,22 @@ def extract_bot_response(data: Dict[str, Any]) -> str:
     Extracts the actual text message from LangFlow's complex response structure
     """
     try:
-        # Check if we have the basic structure
         if not data.get("outputs") or not isinstance(data["outputs"], list):
             return "Invalid response structure from LangFlow."
 
-        # Check if outputs array is empty
         if len(data["outputs"]) == 0:
             return "No response provided by the agent."
 
         first_output = data["outputs"][0]
 
-        # Check if the first output has outputs field
         if not first_output.get("outputs"):
             return "No response provided by the agent."
 
-        # Check if outputs array within first output is empty
         if len(first_output["outputs"]) == 0:
             return "No response provided by the agent."
 
-        # Now we know we have at least one output, let's try to extract the message
         message_output = first_output["outputs"][0]
 
-        # Method 1: Check messages array (most common for chat outputs)
         if (message_output.get("messages") and
                 isinstance(message_output["messages"], list) and
                 len(message_output["messages"]) > 0):

@@ -357,12 +357,10 @@ class FlowService:
         if not token:
             raise ValueError("No valid authentication token found")
 
-        # Validate access first
         has_access = await self.validate_user_flow_access(request, flow_id)
         if not has_access:
             raise ValueError(f"Flow '{flow_id}' not found or access denied")
 
-        # Create temporary API key for execution
         api_key_response = await self.langflow_repo.create_api_key(
             token=token,
             name=f"temp_execution_{flow_id}",
@@ -388,7 +386,7 @@ class FlowService:
                 success=False,
                 flow_id=flow_id,
                 session_id=payload.get("session_id", ""),
-                response="",
+                response="Error while executing Flow.",
                 error=str(e)
             )
         finally:
