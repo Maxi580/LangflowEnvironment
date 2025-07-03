@@ -302,10 +302,10 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
       {/* Dropdown Menu */}
       {isOpen && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800 border border-slate-600
-                        rounded-lg shadow-xl z-50 max-h-96 overflow-hidden">
+                        rounded-lg shadow-xl z-50 flex flex-col" style={{ maxHeight: '28rem' }}>
 
           {/* Header */}
-          <div className="border-b border-slate-600 bg-slate-700 px-4 py-3">
+          <div className="border-b border-slate-600 bg-slate-700 px-4 py-3 flex-shrink-0">
             <div className="flex items-center justify-between">
               <h3 className="text-white font-medium">All Flows</h3>
               <div className="flex items-center space-x-2 text-xs text-slate-400">
@@ -324,7 +324,7 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
           </div>
 
           {/* Search and Actions */}
-          <div className="p-3 border-b border-slate-600 bg-slate-700">
+          <div className="p-3 border-b border-slate-600 bg-slate-700 flex-shrink-0">
             <div className="flex items-center space-x-2 mb-3">
               {/* Search Input */}
               <div className="flex-1 relative">
@@ -410,8 +410,8 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
             </div>
           </div>
 
-          {/* Flows List */}
-          <div className="max-h-64 overflow-y-auto">
+          {/* Flows List - This is the key fix */}
+          <div className="flex-1 overflow-y-auto min-h-0">
             {(isLoading || isLoadingPublic) ? (
               <div className="p-6 text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -529,7 +529,7 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
           </div>
 
           {/* Footer */}
-          <div className="px-4 py-2 bg-slate-700 border-t border-slate-600">
+          <div className="px-4 py-2 bg-slate-700 border-t border-slate-600 flex-shrink-0">
             <p className="text-xs text-slate-400">
               {filteredFlows.length} of {totalFlowsCount} flows
               {selectedFlow && ` • Selected: ${selectedFlow.name}`}
