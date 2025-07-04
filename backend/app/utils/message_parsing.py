@@ -4,12 +4,19 @@ import os
 from typing import Dict, Any, Optional, Tuple
 
 PPTX_MAGIC_BYTES = os.getenv("PPTX_MAGIC_BYTES")
+DOCX_MAGIC_BYTES = os.getenv("DOCX_MAGIC_BYTES")
 
 
 def extract_generated_files(text: str) -> Tuple[str, Optional[Dict[str, Any]]]:
     pptx_pattern = rf'<{PPTX_MAGIC_BYTES}>\s*filename:([^\n]+)\s*content_type:([^\n]+)\s*size:(\d+)\s*data:([^\n<]+)\s*</{PPTX_MAGIC_BYTES}>'
+    docx_pattern = rf'<{DOCX_MAGIC_BYTES}>\s*filename:([^\n]+)\s*content_type:([^\n]+)\s*size:(\d+)\s*data:([^\n<]+)\s*</{DOCX_MAGIC_BYTES}>'
 
     match = re.search(pptx_pattern, text, re.MULTILINE | re.DOTALL)
+    pattern_used = pptx_pattern
+
+    if not match:
+        match = re.search(docx_pattern, text, re.MULTILINE | re.DOTALL)
+        pattern_used = docx_pattern
 
     if not match:
         return text, None
@@ -33,7 +40,7 @@ def extract_generated_files(text: str) -> Tuple[str, Optional[Dict[str, Any]]]:
             "base64_data": base64_data
         }
 
-        cleaned_text = re.sub(pptx_pattern, '', text, flags=re.MULTILINE | re.DOTALL).strip()
+        cleaned_text = re.sub(pattern_used, '', text, flags=re.MULTILINE | re.DOTALL).strip()
 
         return cleaned_text, file_data
 
