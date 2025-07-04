@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DOCX_MAGIC_BYTES = os.getenv("DOCX_MAGIC_BYTES")
+DOCX_MAGIC_BYTES = os.getenv("DOCX_MAGIC_BYTES", "DOCX_FILE")  # Default fallback
 
 
 class AtosTemplateWordComponent(Component):
@@ -23,6 +23,12 @@ class AtosTemplateWordComponent(Component):
             name="customer_name",
             display_name="Customer Name",
             info="Customer name for the document filename",
+            required=True,
+        ),
+        MultilineInput(
+            name="project_name",
+            display_name="Project Name",
+            info="Project name to display in the title",
             required=True,
         ),
         MultilineInput(
@@ -81,17 +87,21 @@ class AtosTemplateWordComponent(Component):
         """
         Add a section with bold title and content to the document
         """
+        # Add title paragraph
         title_paragraph = doc.add_paragraph()
         title_run = title_paragraph.add_run(title)
         title_run.bold = True
-        title_run.font.size = Pt(14)
+        title_run.font.size = Pt(14)  # Slightly bigger font for titles
 
+        # Add content paragraph
         content_paragraph = doc.add_paragraph()
         content_run = content_paragraph.add_run(content)
-        content_run.font.size = Pt(11)
+        content_run.font.size = Pt(11)  # Normal font size for content
 
-        doc.add_paragraph()
+        # Add extra spacing after each section
+        doc.add_paragraph()  # This creates the newline after each section
 
+        print(f"✓ Added section: {title}")
 
     def create_word_document(self) -> Data:
         """Create Word document with structured sections"""
@@ -105,11 +115,15 @@ class AtosTemplateWordComponent(Component):
             title_run.font.size = Pt(16)
             title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-            # Add some space after title
+            project_paragraph = doc.add_paragraph()
+            project_run = project_paragraph.add_run(f"({self.project_name})")
+            project_run.bold = True
+            project_run.font.size = Pt(14)
+            project_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
             doc.add_paragraph()
             doc.add_paragraph()
 
-            # Define sections with their content
             sections = [
                 ("About Client", self.about_client),
                 ("Challenge", self.challenge_text),
@@ -153,3 +167,4 @@ data:{base64_content}
         except Exception as e:
             error_text = f"❌ Failed to create Word document: {str(e)}"
             return Data(data={"text": error_text})
+
