@@ -56,7 +56,7 @@ class FlowExecutionResult(BaseModel):
     flow_id: str
     session_id: str
     response: str
-    generated_file: Optional[GeneratedFileData] = None
+    generated_files: List[Optional[GeneratedFileData]] = []
     execution_time: Optional[float] = None
     error: Optional[str] = None
 

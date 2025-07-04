@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DOCX_MAGIC_BYTES = os.getenv("DOCX_MAGIC_BYTES", "DOCX_FILE")  # Default fallback
+DOCX_MAGIC_BYTES = os.getenv("DOCX_MAGIC_BYTES")
 
 
 class AtosTemplateWordComponent(Component):

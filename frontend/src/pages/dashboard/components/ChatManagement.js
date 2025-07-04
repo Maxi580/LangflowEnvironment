@@ -233,7 +233,7 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => 
     const isSystem = message.sender === 'system';
     const isError = message.sender === 'error';
     const hasAttachments = message.metadata?.attachedFiles?.length > 0;
-    const hasGeneratedFile = message.metadata?.generatedFile;
+    const hasGeneratedFiles = message.metadata?.generatedFiles?.length > 0;
 
     const createDownloadUrl = (generatedFile) => {
       try {
@@ -342,25 +342,28 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => 
           )}
 
           {/* Generated files from bot */}
-          {hasGeneratedFile && (
-            <div className="mt-3 pt-2 border-t border-slate-500">
-              <div className="text-xs mb-2 text-slate-300">📄 Generated file:</div>
-              <div className="bg-slate-600 rounded-lg p-3 hover:bg-slate-550 transition-colors">
+          {hasGeneratedFiles && (
+          <div className="mt-3 pt-2 border-t border-slate-500">
+            <div className="text-xs mb-2 text-slate-300">
+              📄 Generated file{message.metadata.generatedFiles.length > 1 ? 's' : ''}:
+            </div>
+            {message.metadata.generatedFiles.map((generatedFile, index) => (
+              <div key={index} className="bg-slate-600 rounded-lg p-3 hover:bg-slate-550 transition-colors mb-2 last:mb-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    {getFileTypeIcon(hasGeneratedFile.filename, hasGeneratedFile.content_type)}
+                    {getFileTypeIcon(generatedFile.filename, generatedFile.content_type)}
                     <div>
                       <div className="text-sm font-medium text-white">
-                        {hasGeneratedFile.filename}
+                        {generatedFile.filename}
                       </div>
                       <div className="text-xs text-slate-400">
-                        {formatFileSize(hasGeneratedFile.size)} • {hasGeneratedFile.content_type.split('/').pop().toUpperCase()}
+                        {formatFileSize(generatedFile.size)} • {generatedFile.content_type.split('/').pop().toUpperCase()}
                       </div>
                     </div>
                   </div>
 
                   <button
-                    onClick={() => handleDownload(hasGeneratedFile)}
+                    onClick={() => handleDownload(generatedFile)}
                     className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs
                              transition-colors flex items-center space-x-1"
                     title="Download file"
@@ -373,8 +376,9 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => 
                   </button>
                 </div>
               </div>
-            </div>
-          )}
+            ))}
+          </div>
+        )}
 
           <div className={`text-xs mt-1 opacity-70 ${isUser ? 'text-right' : 'text-left'}`}>
             {formatTimestamp(message.timestamp)}

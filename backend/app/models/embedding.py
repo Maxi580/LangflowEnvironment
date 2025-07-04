@@ -22,8 +22,7 @@ class ModelInfo(BaseModel):
     size: int
     digest: str
     modified_at: str
-    model_type: Optional[str] = None  # embedding, vision, chat
-
+    model_type: Optional[str] = None
 
 class ModelCategories(BaseModel):
     """Categorized models by type"""

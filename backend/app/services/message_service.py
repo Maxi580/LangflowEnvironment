@@ -62,12 +62,9 @@ class MessageService:
             flow_id: Optional[str],
             session_id: Optional[str]
     ) -> MessageRequest:
-        """Prepare the final message request from either JSON or form data"""
         if message_request is not None:
-            # JSON request (backward compatibility)
             return message_request
         else:
-            # Form data request
             if not message and not flow_id:
                 raise ValueError("Either message_request or form data (message, flow_id) must be provided")
             if not flow_id:
@@ -100,7 +97,6 @@ class MessageService:
             if file_content:
                 file_contents.append(file_content)
 
-        # Combine original message with file contents
         enhanced_message = original_message.strip()
 
         if file_contents:
@@ -191,7 +187,7 @@ class MessageService:
             response = MessageResponse(
                 success=True,
                 response=execution_result.response,
-                generated_file=execution_result.generated_file,
+                generated_files=execution_result.generated_files,
                 session_id=session_id,
                 flow_id=message_request.flow_id,
                 timestamp=datetime.utcnow()

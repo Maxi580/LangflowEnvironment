@@ -19,7 +19,7 @@ class GeneratedFileData(BaseModel):
 class MessageResponse(BaseModel):
     success: bool
     response: str
-    generated_file: Optional[GeneratedFileData] = None
+    generated_files: List[Optional[GeneratedFileData]] = []
     session_id: str
     flow_id: str
     error: Optional[str] = None
@@ -28,7 +28,7 @@ class MessageResponse(BaseModel):
 
 class LangflowMessageResponse(BaseModel):
     extracted_message: str
-    generated_file: Optional[GeneratedFileData] = None
+    generated_files: List[Optional[GeneratedFileData]] = []
 
 
 class ChatSession(BaseModel):

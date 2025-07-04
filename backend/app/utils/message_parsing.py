@@ -1,38 +1,55 @@
 import re
 import base64
 import os
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 
 PPTX_MAGIC_BYTES = os.getenv("PPTX_MAGIC_BYTES")
 DOCX_MAGIC_BYTES = os.getenv("DOCX_MAGIC_BYTES")
 
 
-def extract_generated_files(text: str) -> Tuple[str, Optional[Dict[str, Any]]]:
+def extract_generated_files(text: str) -> Tuple[str, List[Dict[str, Any]]]:
+    """
+    Extract all generated files (both PPTX and DOCX) from text
+    Returns: (cleaned_text, list_of_file_data)
+    """
     pptx_pattern = rf'<{PPTX_MAGIC_BYTES}>\s*filename:([^\n]+)\s*content_type:([^\n]+)\s*size:(\d+)\s*data:([^\n<]+)\s*</{PPTX_MAGIC_BYTES}>'
     docx_pattern = rf'<{DOCX_MAGIC_BYTES}>\s*filename:([^\n]+)\s*content_type:([^\n]+)\s*size:(\d+)\s*data:([^\n<]+)\s*</{DOCX_MAGIC_BYTES}>'
 
-    match = re.search(pptx_pattern, text, re.MULTILINE | re.DOTALL)
-    pattern_used = pptx_pattern
+    files_found = []
+    cleaned_text = text
 
-    if not match:
-        match = re.search(docx_pattern, text, re.MULTILINE | re.DOTALL)
-        pattern_used = docx_pattern
+    pptx_matches = re.finditer(pptx_pattern, text, re.MULTILINE | re.DOTALL)
+    for match in pptx_matches:
+        file_data = extract_file_from_match(match)
+        if file_data:
+            files_found.append(file_data)
+            cleaned_text = re.sub(re.escape(match.group(0)), '', cleaned_text, count=1)
 
-    if not match:
-        return text, None
+    docx_matches = re.finditer(docx_pattern, text, re.MULTILINE | re.DOTALL)
+    for match in docx_matches:
+        file_data = extract_file_from_match(match)
+        if file_data:
+            files_found.append(file_data)
+            cleaned_text = re.sub(re.escape(match.group(0)), '', cleaned_text, count=1)
 
-    filename = match.group(1).strip()
-    content_type = match.group(2).strip()
-    size = int(match.group(3).strip())
-    base64_data = match.group(4).strip()
+    cleaned_text = cleaned_text.strip()
 
+    return cleaned_text, files_found
+
+
+def extract_file_from_match(match) -> Optional[Dict[str, Any]]:
     try:
+        filename = match.group(1).strip()
+        content_type = match.group(2).strip()
+        size = int(match.group(3).strip())
+        base64_data = match.group(4).strip()
+
         file_content = base64.b64decode(base64_data)
 
         if len(file_content) != size:
-            print(f"Warning: File size mismatch. Expected {size}, got {len(file_content)}")
+            print(f"Warning: File size mismatch for {filename}. Expected {size}, got {len(file_content)}")
 
-        file_data = {
+        return {
             "filename": filename,
             "content_type": content_type,
             "size": size,
@@ -40,13 +57,9 @@ def extract_generated_files(text: str) -> Tuple[str, Optional[Dict[str, Any]]]:
             "base64_data": base64_data
         }
 
-        cleaned_text = re.sub(pattern_used, '', text, flags=re.MULTILINE | re.DOTALL).strip()
-
-        return cleaned_text, file_data
-
     except Exception as e:
-        print(f"Error parsing generated file: {e}")
-        return text, None
+        print(f"Error parsing file from match: {e}")
+        return None
 
 
 def extract_bot_response(data: Dict[str, Any]) -> str:
@@ -119,7 +132,7 @@ def extract_bot_response(data: Dict[str, Any]) -> str:
         return "Failed to parse response from the agent."
 
 
-def extract_bot_response_with_files(data: Dict[str, Any]) -> Tuple[str, Optional[Dict[str, Any]]]:
+def extract_bot_response_with_files(data: Dict[str, Any]) -> Tuple[str, List[Optional[Dict[str, Any]]]]:
     """
     Enhanced version that returns both the cleaned text and file data
 
@@ -135,4 +148,4 @@ def extract_bot_response_with_files(data: Dict[str, Any]) -> Tuple[str, Optional
 
     except Exception as err:
         print(f"Error extracting bot response with files: {err}")
-        return "Failed to parse response from the agent.", None
+        return "Failed to parse response from the agent.", [None]

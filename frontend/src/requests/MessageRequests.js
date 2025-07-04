@@ -168,23 +168,24 @@ class MessageService {
 
       this.setCurrentSessionId(responseData.session_id);
 
-      let generatedFile = null;
-      if (responseData.generated_file) {
-        generatedFile = {
-          filename: responseData.generated_file.filename,
-          content_type: responseData.generated_file.content_type,
-          size: responseData.generated_file.size,
-          base64_data: responseData.generated_file.base64_data
-        };
-        console.log("Generated file received:", generatedFile.filename);
-      }
+     let generatedFiles = [];
+    if (responseData.generated_files && Array.isArray(responseData.generated_files)) {
+        generatedFiles = responseData.generated_files.map(file => ({
+        filename: file.filename,
+        content_type: file.content_type,
+        size: file.size,
+        base64_data: file.base64_data
+        }));
+        console.log(`${generatedFiles.length} generated file(s) received:`,
+                 generatedFiles.map(f => f.filename));
+    }
 
-      return createMessage(responseData.response, 'bot', {
+    return createMessage(responseData.response, 'bot', {
         sessionId: responseData.session_id,
         flowId,
         processedFiles: responseData.processed_files || [],
-        generatedFile: generatedFile
-      });
+        generatedFiles: generatedFiles
+    });
 
     } catch (error) {
       console.error('Error sending message with files:', error);

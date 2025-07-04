@@ -231,20 +231,20 @@ class LangflowRepository:
             raise Exception(f"Flow execution failed: {response.text}")
 
         response_data = response.json()
-        extracted_message, file_data = extract_bot_response_with_files(response_data)
+        extracted_message, files = extract_bot_response_with_files(response_data)
 
-        generated_file = None
-        if file_data:
-            generated_file = GeneratedFileData(
-                filename=file_data["filename"],
-                content_type=file_data["content_type"],
-                size=file_data["size"],
-                base64_data=file_data["base64_data"]
-            )
+        generated_files = []
+        for file in  files:
+            generated_files.append(GeneratedFileData(
+                filename=file["filename"],
+                content_type=file["content_type"],
+                size=file["size"],
+                base64_data=file["base64_data"]
+            ))
 
         return LangflowMessageResponse(
             extracted_message=extracted_message,
-            generated_file=generated_file
+            generated_files=generated_files
         )
 
     async def create_api_key(self, token: str, name: str, description: str = "") -> Dict[str, Any]:
