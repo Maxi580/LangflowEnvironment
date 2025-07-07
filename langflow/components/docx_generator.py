@@ -1,6 +1,6 @@
 from langflow.custom import Component
 from langflow.io import Output, MultilineInput
-from langflow.schema import Data
+from langflow.schema import Message
 from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -103,7 +103,7 @@ class AtosTemplateWordComponent(Component):
 
         print(f"✓ Added section: {title}")
 
-    def create_word_document(self) -> Data:
+    def create_word_document(self) -> Message:
         """Create Word document with structured sections"""
 
         try:
@@ -162,9 +162,9 @@ size:{len(file_content)}
 data:{base64_content}
 </{DOCX_MAGIC_BYTES}>"""
 
-            return Data(data={"text": text_response})
+            return text_response
 
         except Exception as e:
             error_text = f"❌ Failed to create Word document: {str(e)}"
-            return Data(data={"text": error_text})
+            return error_text
 
