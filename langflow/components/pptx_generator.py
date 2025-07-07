@@ -3,6 +3,7 @@ from langflow.io import Output, MultilineInput
 from langflow.schema import Message
 from pptx import Presentation
 from pptx.util import Inches
+from pptx.dml.color import RGBColor
 from PIL import Image
 import tempfile
 import base64
@@ -167,6 +168,36 @@ class AtosTemplatePowerPointComponent(Component):
             print(f"❌ Error adding logo: {e}")
             return False
 
+    def add_logo_placeholder(self, slide):
+        try:
+            cm_to_inches = 0.393701
+
+            left = Inches(29.81 * cm_to_inches)
+            top = Inches(0.81 * cm_to_inches)
+            width = Inches(2.87 * cm_to_inches)
+            height = Inches(2.53 * cm_to_inches)
+
+            textbox = slide.shapes.add_textbox(left, top, width, height)
+            text_frame = textbox.text_frame
+            text_frame.text = "Logo Here"
+
+            paragraph = text_frame.paragraphs[0]
+            paragraph.alignment = 1
+            font = paragraph.font
+            font.size = Inches(0.2)
+            font.color.rgb = RGBColor(128, 128, 128)
+
+            line = textbox.line
+            line.color.rgb = RGBColor(200, 200, 200)
+            line.width = Inches(0.01)
+
+            print(f"✓ Added logo placeholder at position ({29.81:.2f}cm, {0.81:.2f}cm)")
+            return True
+
+        except Exception as e:
+            print(f"❌ Error adding logo placeholder: {e}")
+            return False
+
     def create_powerpoint(self) -> Message:
         """Create PowerPoint from Atos template by replacing placeholders"""
 
@@ -187,32 +218,28 @@ class AtosTemplatePowerPointComponent(Component):
                 '{{IMPACT_TEXT}}': self.impact_text,
             }
 
+            has_logo = self.logo_base64 and self.logo_base64.strip()
             logo_data = None
-            logo_size = None
-            if self.logo_base64 and self.logo_base64.strip():
+
+            if has_logo:
                 print("🖼️ Processing logo...")
                 logo_data, logo_size = self.decode_base64_image(self.logo_base64.strip())
                 if logo_data:
                     print(f"✓ Logo decoded successfully ({len(logo_data)} bytes)")
                 else:
+                    has_logo = False
                     print("❌ Failed to decode logo")
-
-            total_replacements = 0
-            logo_replacements = 0
 
             for slide_idx, slide in enumerate(prs.slides):
                 print(f"\n🔄 Processing slide {slide_idx + 1}...")
 
-                replacements_made = self.find_and_replace_text_in_slide(slide, replacements)
-                total_replacements += replacements_made
+                self.find_and_replace_text_in_slide(slide, replacements)
 
-                if logo_data and slide_idx == 0:
-                    if self.add_logo_at_fixed_position(slide, logo_data):
-                        logo_replacements += 1
-
-            print(f"\n✅ Made {total_replacements} text replacements")
-            if logo_data:
-                print(f"✅ Made {logo_replacements} logo replacements")
+                if slide_idx == 0:
+                    if has_logo and logo_data:
+                        self.add_logo_at_fixed_position(slide, logo_data)
+                    else:
+                        self.add_logo_placeholder(slide)
 
             temp_file = tempfile.NamedTemporaryFile(suffix='.pptx', delete=False)
             temp_file_path = temp_file.name
