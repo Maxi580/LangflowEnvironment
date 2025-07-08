@@ -1,8 +1,6 @@
 import hashlib
 import os
-import time
 import base64
-from functools import lru_cache
 import tempfile
 import fitz
 import zipfile
