@@ -15,10 +15,12 @@ import requests
 from typing import List, Dict, Any, Optional, Tuple, Set
 
 from .image_description_cache import ImageDescriptionCache, compute_image_hash
+from ..external.gemini_api import get_gemini_description
 
 OLLAMA_URL = os.getenv("OLLAMA_INTERNAL_URL")
 DEFAULT_EMBEDDING_MODEL = os.getenv("DEFAULT_EMBEDDING_MODEL")
 DEFAULT_VISION_MODEL = os.getenv("DEFAULT_VISION_MODEL")
+USE_GOOGLE_VISION = os.getenv("USE_GOOGLE_VISION")
 
 OLLAMA_EMBEDDINGS_ENDPOINT = os.getenv("OLLAMA_EMBEDDINGS_ENDPOINT")
 OLLAMA_GENERATE_ENDPOINT = os.getenv("OLLAMA_GENERATE_ENDPOINT")
@@ -101,11 +103,9 @@ def get_text_embedding(text: str) -> List[float]:
         raise ValueError(f"Unexpected error getting embedding from model {model}: {str(e)}")
 
 
-
-
 def get_image_description(image_path: str, prompt: str = None) -> str:
     """
-    Get image description using the configured vision model
+    Get image description using the configured vision model. Only Called when local vision models are configured.
 
     Args:
         image_path: Path to the image file
@@ -228,7 +228,7 @@ def get_available_models() -> Dict[str, List[str]]:
 
 def get_ollama_image_description_from_bytes(image_data: bytes) -> str:
     """
-    Get image description from image bytes with caching
+    Get image description from image bytes with caching. This is only called if the local vision models are configured.
 
     Args:
         image_data: Raw image bytes
@@ -321,7 +321,10 @@ def extract_images_from_pdf(file_path: str) -> List[Tuple[bytes, str]]:
                         continue
                     seen_hashes.add(img_hash)
 
-                    description = get_ollama_image_description_from_bytes(img_data)
+                    if USE_GOOGLE_VISION:
+                        description = get_gemini_description(img_data)
+                    else:
+                        description = get_ollama_image_description_from_bytes(img_data)
                     images.append((img_data, f"[Image from page {page_num + 1}]: {description}"))
                     pix = None
 
@@ -368,7 +371,10 @@ def extract_images_from_docx(file_path: str) -> List[Tuple[bytes, str]]:
                                 continue
                             seen_hashes.add(img_hash)
 
-                            description = get_ollama_image_description_from_bytes(img_data)
+                            if USE_GOOGLE_VISION:
+                                description = get_gemini_description(img_data)
+                            else:
+                                description = get_ollama_image_description_from_bytes(img_data)
                             images.append((img_data, f"[Word embedded image]: {description}"))
 
                         except Exception as e:
@@ -407,8 +413,10 @@ def extract_images_from_pptx(file_path: str) -> List[Tuple[bytes, str]]:
                             continue
                         seen_hashes.add(img_hash)
 
-                        # Generate description for new image
-                        description = get_ollama_image_description_from_bytes(img_data)
+                        if USE_GOOGLE_VISION:
+                            description = get_gemini_description(img_data)
+                        else:
+                            description = get_ollama_image_description_from_bytes(img_data)
                         images.append((img_data, f"[Image from slide {slide_num}]: {description}"))
 
                 except Exception as e:
@@ -449,8 +457,10 @@ def extract_images_from_xlsx(file_path: str) -> List[Tuple[bytes, str]]:
                                 continue
                             seen_hashes.add(img_hash)
 
-                            # Generate description for new image
-                            description = get_ollama_image_description_from_bytes(img_data)
+                            if USE_GOOGLE_VISION:
+                                description = get_gemini_description(img_data)
+                            else:
+                                description = get_ollama_image_description_from_bytes(img_data)
                             images.append((img_data, f"[Excel embedded image]: {description}"))
 
                         except Exception as e:
@@ -743,7 +753,12 @@ def read_file_content(file_path: str, include_images: bool = True) -> Tuple[str,
         content = extract_docx(file_path, include_images)
         return content, 'docx'
     elif file_type == 'image':
-        description = get_image_description(file_path)
+        if USE_GOOGLE_VISION:
+            with open(file_path, "rb") as f:
+                file_bytes = f.read()
+            description = get_gemini_description(file_bytes)
+        else:
+            description = get_image_description(file_path)
         return description, 'image'
     else:
         raise ValueError(f"Unsupported file type '{file_type}' for {file_path}")

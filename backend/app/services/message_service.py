@@ -151,7 +151,6 @@ class MessageService:
             error_msg = f"Could not read file '{file.filename}': {str(e)}"
             return f"\n\n--- FILE: {file.filename} (READ FAILED) ---\n{error_msg}\n"
 
-
     async def send_message_to_flow(self, request: Request, message_request: MessageRequest) -> MessageResponse:
         """Send a message to a flow and return the response"""
         await self._validate_message_request(request, message_request)

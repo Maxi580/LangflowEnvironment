@@ -1,0 +1,25 @@
+import google.generativeai as genai
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+API_KEY = os.getenv('GEMINI_API_KEY')
+VISION_MODEL = os.getenv('DEFAULT_GOOGLE_VISION')
+
+genai.configure(api_key=API_KEY)
+model = genai.GenerativeModel(VISION_MODEL)
+
+
+def get_gemini_description(image_bytes: bytes):
+    prompt = "Caption this image. Please try to extract any text you can find."
+
+    response = model.generate_content([
+        {
+            "mime_type": "image/jpeg",
+            "data": image_bytes
+        },
+        prompt
+    ])
+
+    return response.text
