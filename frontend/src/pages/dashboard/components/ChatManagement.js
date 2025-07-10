@@ -43,10 +43,10 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => 
 
   const addFilesToAttachment = (newFiles) => {
     const validFiles = newFiles.filter(file => {
-      // File size limit (10MB)
-      if (file.size > 10 * 1024 * 1024) {
+      // File size limit (25MB)
+      if (file.size > 25 * 1024 * 1024) {
         const errorMessage = messageService.createErrorMessage(
-          `File "${file.name}" is too large. Maximum size is 10MB.`
+          `File "${file.name}" is too large. Maximum size is 25MB.`
         );
         setMessages(prev => [...prev, errorMessage]);
         return false;
