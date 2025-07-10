@@ -28,7 +28,7 @@ const createMessage = (text, sender, metadata = {}) => {
 };
 
 const validateFiles = (files) => {
-  const maxFileSize = 10 * 1024 * 1024; // 10MB
+  const maxFileSize = 25 * 1024 * 1024; // 10MB
   const allowedTypes = [
     'text/plain',
     'application/pdf',
@@ -54,7 +54,7 @@ const validateFiles = (files) => {
 
   for (let file of files) {
     if (file.size > maxFileSize) {
-      throw new Error(`File "${file.name}" exceeds maximum size of 10MB`);
+      throw new Error(`File "${file.name}" exceeds maximum size of 20MB`);
     }
 
     // Check file type (if specified)
