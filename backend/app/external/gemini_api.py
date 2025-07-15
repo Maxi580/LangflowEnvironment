@@ -17,7 +17,7 @@ def get_gemini_description(image_bytes: bytes):
     if cached_description:
         return cached_description
 
-    prompt = "Caption this image. Please try to extract any text you can find."
+    prompt = "Please describe this Image in detail. Please try to extract any text you can find."
 
     response = model.generate_content([
         {
