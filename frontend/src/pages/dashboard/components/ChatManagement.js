@@ -43,10 +43,10 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => 
 
   const addFilesToAttachment = (newFiles) => {
     const validFiles = newFiles.filter(file => {
-      // File size limit (10MB)
-      if (file.size > 10 * 1024 * 1024) {
+      // File size limit (25MB)
+      if (file.size > 25 * 1024 * 1024) {
         const errorMessage = messageService.createErrorMessage(
-          `File "${file.name}" is too large. Maximum size is 10MB.`
+          `File "${file.name}" is too large. Maximum size is 25MB.`
         );
         setMessages(prev => [...prev, errorMessage]);
         return false;
@@ -440,7 +440,7 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => 
                       d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
               <p className="text-blue-400 font-medium">Drop files here to attach</p>
-              <p className="text-slate-400 text-sm">Max 10MB per file</p>
+              <p className="text-slate-400 text-sm">Max 25MB per file</p>
             </div>
           </div>
         </div>
