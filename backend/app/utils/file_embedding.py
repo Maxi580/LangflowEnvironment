@@ -103,7 +103,7 @@ def get_text_embedding(text: str) -> List[float]:
         raise ValueError(f"Unexpected error getting embedding from model {model}: {str(e)}")
 
 
-def get_image_description(image_path: str, prompt: str = None) -> str:
+def get_ollama_image_description(image_path: str, prompt: str = None) -> str:
     """
     Get image description using the configured vision model. Only Called when local vision models are configured.
 
@@ -236,10 +236,6 @@ def get_ollama_image_description_from_bytes(image_data: bytes) -> str:
     Returns:
         String description of the image
     """
-    cached_description = image_cache.get_description(image_data)
-    if cached_description:
-        return cached_description
-
     try:
         if image_data.startswith(b'\xff\xd8\xff'):
             suffix = '.jpg'
@@ -257,14 +253,13 @@ def get_ollama_image_description_from_bytes(image_data: bytes) -> str:
             temp_file_path = temp_file.name
 
         try:
-            description = get_image_description(temp_file_path)
+            description = get_ollama_image_description(temp_file_path)
 
             if not description or description.strip() == "":
                 description = "No description available for this image."
             else:
                 description = description.strip()
 
-            image_cache.store_description(image_data, description)
             print(
                 f"Generated and cached new image description (hash: {hashlib.sha256(image_data).hexdigest()[:12]}...)")
 
@@ -279,154 +274,7 @@ def get_ollama_image_description_from_bytes(image_data: bytes) -> str:
     except Exception as e:
         print(f"Error getting image description from bytes: {e}")
         error_description = "Failed to describe this image."
-        image_cache.store_description(image_data, error_description)
         return error_description
-
-
-def extract_images_from_pdf(file_path: str) -> List[Tuple[bytes, str]]:
-    """
-    Extract images from PDF using PyMuPDF with duplicate detection
-
-    Returns:
-        List of (image_bytes, description) tuples
-    """
-    images = []
-    seen_hashes: Set[str] = set()
-
-    try:
-        doc = fitz.open(file_path)
-
-        for page_num in range(len(doc)):
-            page = doc.load_page(page_num)
-            image_list = page.get_images()
-
-            for img_index, img in enumerate(image_list):
-                try:
-                    xref = img[0]
-                    pix = fitz.Pixmap(doc, xref)
-
-                    # Convert to RGB if CMYK
-                    if pix.n - pix.alpha < 4:
-                        img_data = pix.tobytes("png")
-                    else:
-                        # Convert CMYK to RGB
-                        pix1 = fitz.Pixmap(fitz.csRGB, pix)
-                        img_data = pix1.tobytes("png")
-                        pix1 = None
-
-                    img_hash = compute_image_hash(img_data)
-                    if img_hash in seen_hashes:
-                        print(f"Skipping duplicate PDF image on page {page_num + 1}")
-                        pix = None
-                        continue
-                    seen_hashes.add(img_hash)
-
-                    if USE_GOOGLE_VISION:
-                        description = get_gemini_description(img_data)
-                    else:
-                        description = get_ollama_image_description_from_bytes(img_data)
-                    images.append((img_data, f"[Image from page {page_num + 1}]: {description}"))
-                    pix = None
-
-                except Exception as e:
-                    print(f"Error extracting image {img_index} from page {page_num}: {e}")
-                    continue
-
-        doc.close()
-
-    except Exception as e:
-        print(f"Error extracting images from PDF {file_path}: {e}")
-
-    return images
-
-
-def extract_images_from_docx(file_path: str) -> List[Tuple[bytes, str]]:
-    """
-    Extract images from Word document (.docx)
-
-    Returns:
-        List of (image_bytes, description) tuples
-    """
-    images = []
-    seen_hashes: Set[str] = set()
-
-    try:
-        # Word documents are also zip archives
-        with zipfile.ZipFile(file_path, 'r') as zip_file:
-            # Look for image files in the media directory
-            for file_info in zip_file.filelist:
-                if file_info.filename.startswith('word/media/'):
-                    # Check if it's an image file
-                    if any(file_info.filename.lower().endswith(ext) for ext in
-                           ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.emf', '.wmf']):
-                        try:
-                            img_data = zip_file.read(file_info.filename)
-
-                            if file_info.filename.lower().endswith(('.emf', '.wmf')):
-                                continue
-
-                            img_hash = compute_image_hash(img_data)
-                            if img_hash in seen_hashes:
-                                print(f"Skipping duplicate image: {file_info.filename}")
-                                continue
-                            seen_hashes.add(img_hash)
-
-                            if USE_GOOGLE_VISION:
-                                description = get_gemini_description(img_data)
-                            else:
-                                description = get_ollama_image_description_from_bytes(img_data)
-                            images.append((img_data, f"[Word embedded image]: {description}"))
-
-                        except Exception as e:
-                            print(f"Error processing Word image {file_info.filename}: {e}")
-                            continue
-
-    except Exception as e:
-        print(f"Error extracting images from Word document {file_path}: {e}")
-
-    return images
-
-
-def extract_images_from_pptx(file_path: str) -> List[Tuple[bytes, str]]:
-    """
-    Extract images from PowerPoint presentation with duplicate detection
-
-    Returns:
-        List of (image_bytes, description) tuples
-    """
-    images = []
-    seen_hashes: Set[str] = set()
-
-    try:
-        presentation = Presentation(file_path)
-
-        for slide_num, slide in enumerate(presentation.slides, 1):
-            for shape in slide.shapes:
-                try:
-                    # Check if shape has an image
-                    if hasattr(shape, "image") and shape.image:
-                        img_data = shape.image.blob
-
-                        img_hash = compute_image_hash(img_data)
-                        if img_hash in seen_hashes:
-                            print(f"Skipping duplicate image on slide {slide_num}")
-                            continue
-                        seen_hashes.add(img_hash)
-
-                        if USE_GOOGLE_VISION:
-                            description = get_gemini_description(img_data)
-                        else:
-                            description = get_ollama_image_description_from_bytes(img_data)
-                        images.append((img_data, f"[Image from slide {slide_num}]: {description}"))
-
-                except Exception as e:
-                    print(f"Error extracting image from slide {slide_num}: {e}")
-                    continue
-
-    except Exception as e:
-        print(f"Error extracting images from PowerPoint {file_path}: {e}")
-
-    return images
 
 
 def extract_images_from_xlsx(file_path: str) -> List[Tuple[bytes, str]]:
@@ -523,26 +371,144 @@ def detect_file_type(file_path: str) -> str:
 
 
 def extract_pdf(file_path: str, include_images: bool = True) -> str:
-    """Extract text from PDF files using PyPDF2, optionally including image descriptions"""
+    """Extract text from PDF files, optionally including image descriptions in proper order"""
     try:
-        text = ""
+        text_content = []
+        seen_hashes: Set[str] = set()
+
+        # Use PyPDF2 for text and PyMuPDF for images (if needed)
         with open(file_path, "rb") as f:
             pdf_reader = PyPDF2.PdfReader(f)
+
+            # Also open with PyMuPDF for image extraction if needed
+            fitz_doc = None
+            if include_images:
+                fitz_doc = fitz.open(file_path)
+
             for page_num in range(len(pdf_reader.pages)):
-                page = pdf_reader.pages[page_num]
-                text += page.extract_text() + "\n\n"
+                page_content = []
 
-        if include_images:
-            images = extract_images_from_pdf(file_path)
-            if images:
-                text += "\n\n=== EMBEDDED IMAGES ===\n\n"
-                for i, (img_data, description) in enumerate(images, 1):
-                    text += f"Image {i}: {description}\n\n"
+                # Add page header
+                page_content.append(f"=== PAGE {page_num + 1} ===")
 
-        return text
+                # Extract and add images first (they're usually at the top/integrated in content)
+                if include_images and fitz_doc:
+                    try:
+                        fitz_page = fitz_doc.load_page(page_num)
+                        image_list = fitz_page.get_images()
+
+                        for img_index, img in enumerate(image_list):
+                            try:
+                                xref = img[0]
+                                pix = fitz.Pixmap(fitz_doc, xref)
+
+                                # Convert to PNG bytes
+                                if pix.n - pix.alpha < 4:
+                                    img_data = pix.tobytes("png")
+                                else:
+                                    pix1 = fitz.Pixmap(fitz.csRGB, pix)
+                                    img_data = pix1.tobytes("png")
+                                    pix1 = None
+
+                                # Check for duplicates
+                                img_hash = compute_image_hash(img_data)
+                                if img_hash not in seen_hashes:
+                                    seen_hashes.add(img_hash)
+
+                                    if USE_GOOGLE_VISION:
+                                        description = get_gemini_description(img_data)
+                                    else:
+                                        description = get_ollama_image_description_from_bytes(img_data)
+
+                                    page_content.append(f"[IMAGE]: {description}")
+                                else:
+                                    print(f"Skipping duplicate PDF image on page {page_num + 1}")
+
+                                pix = None
+
+                            except Exception as e:
+                                print(f"Error extracting image {img_index} from page {page_num + 1}: {e}")
+                                continue
+
+                    except Exception as e:
+                        print(f"Error processing images on page {page_num + 1}: {e}")
+
+                try:
+                    page = pdf_reader.pages[page_num]
+                    page_text = page.extract_text().strip()
+                    if page_text:
+                        page_content.append(page_text)
+                except Exception as e:
+                    print(f"Error extracting text from page {page_num + 1}: {e}")
+                    page_content.append("(Error extracting text from this page)")
+
+                # Add page content to main text
+                if len(page_content) > 1:  # More than just the page header
+                    text_content.extend(page_content)
+                    text_content.append("")  # Add blank line between pages
+                else:
+                    # Empty page
+                    text_content.append(f"=== PAGE {page_num + 1} ===")
+                    text_content.append("(Empty page)")
+                    text_content.append("")
+
+            # Close PyMuPDF document if opened
+            if fitz_doc:
+                fitz_doc.close()
+
+        result = "\n".join(text_content)
+        return result if result.strip() else "No content found in PDF."
+
     except Exception as e:
-        print(f"Error extracting text from PDF {file_path}: {e}")
-        raise
+        print(f"Error extracting content from PDF {file_path}: {e}")
+        raise ValueError(f"Failed to extract content from PDF file: {str(e)}")
+
+
+def _create_image_relationship_map(file_path: str) -> Dict[str, bytes]:
+    """
+    Create a mapping of relationship IDs to image data for DOCX files
+    """
+    image_map = {}
+
+    try:
+        with zipfile.ZipFile(file_path, 'r') as zip_file:
+            # Read the main document relationships
+            try:
+                rels_content = zip_file.read('word/_rels/document.xml.rels')
+                import xml.etree.ElementTree as ET
+                rels_root = ET.fromstring(rels_content)
+
+                # Parse relationships to find image references
+                for rel in rels_root.findall(
+                        './/{http://schemas.openxmlformats.org/package/2006/relationships}Relationship'):
+                    rel_id = rel.get('Id')
+                    target = rel.get('Target')
+                    rel_type = rel.get('Type')
+
+                    # Check if this is an image relationship
+                    if rel_type and 'image' in rel_type and target:
+                        image_path = f"word/{target}"
+
+                        # Check if it's a supported image format
+                        if any(image_path.lower().endswith(ext) for ext in
+                               ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff']):
+                            try:
+                                img_data = zip_file.read(image_path)
+                                image_map[rel_id] = img_data
+                            except KeyError:
+                                print(f"Image file not found: {image_path}")
+                            except Exception as e:
+                                print(f"Error reading image {image_path}: {e}")
+
+            except KeyError:
+                print("No relationships file found")
+            except Exception as e:
+                print(f"Error parsing relationships: {e}")
+
+    except Exception as e:
+        print(f"Error creating image relationship map: {e}")
+
+    return image_map
 
 
 def extract_docx(file_path: str, include_images: bool = True) -> str:
@@ -552,9 +518,41 @@ def extract_docx(file_path: str, include_images: bool = True) -> str:
     try:
         text_content = []
         doc = Document(file_path)
+        seen_hashes: Set[str] = set()
+
+        image_map = {}
+        if include_images:
+            image_map = _create_image_relationship_map(file_path)
 
         # Extract text from paragraphs
         for paragraph in doc.paragraphs:
+            # Check for images in this paragraph first
+            if include_images:
+                for run in paragraph.runs:
+                    # Check if this run contains an image
+                    if run.element.xpath('.//a:blip'):
+                        for blip in run.element.xpath('.//a:blip'):
+                            embed_id = blip.get(
+                                '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+                            if embed_id and embed_id in image_map:
+                                img_data = image_map[embed_id]
+                                try:
+                                    img_hash = compute_image_hash(img_data)
+                                    if img_hash not in seen_hashes:
+                                        seen_hashes.add(img_hash)
+
+                                        if USE_GOOGLE_VISION:
+                                            description = get_gemini_description(img_data)
+                                        else:
+                                            description = get_ollama_image_description_from_bytes(img_data)
+
+                                        text_content.append(f"[IMAGE]: {description}")
+                                    else:
+                                        print(f"Skipping duplicate image in paragraph")
+                                except Exception as e:
+                                    print(f"Error processing inline image: {e}")
+
+            # Add paragraph text if it exists
             if paragraph.text.strip():
                 text_content.append(paragraph.text.strip())
 
@@ -564,8 +562,36 @@ def extract_docx(file_path: str, include_images: bool = True) -> str:
             for row in table.rows:
                 row_data = []
                 for cell in row.cells:
+                    # Check for images in table cells
+                    if include_images:
+                        for paragraph in cell.paragraphs:
+                            for run in paragraph.runs:
+                                if run.element.xpath('.//a:blip'):
+                                    for blip in run.element.xpath('.//a:blip'):
+                                        embed_id = blip.get(
+                                            '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+                                        if embed_id and embed_id in image_map:
+                                            img_data = image_map[embed_id]
+                                            try:
+                                                img_hash = compute_image_hash(img_data)
+                                                if img_hash not in seen_hashes:
+                                                    seen_hashes.add(img_hash)
+
+                                                    if USE_GOOGLE_VISION:
+                                                        description = get_gemini_description(img_data)
+                                                    else:
+                                                        description = get_ollama_image_description_from_bytes(img_data)
+
+                                                    row_data.append(f"[IMAGE]: {description}")
+                                                else:
+                                                    print(f"Skipping duplicate image in table cell")
+                                            except Exception as e:
+                                                print(f"Error processing table image: {e}")
+
+                    # Add cell text
                     if cell.text.strip():
                         row_data.append(cell.text.strip())
+
                 if row_data:
                     table_text.append(" | ".join(row_data))
 
@@ -574,14 +600,6 @@ def extract_docx(file_path: str, include_images: bool = True) -> str:
                 text_content.append("")  # Add blank line after table
 
         result = "\n".join(text_content)
-
-        # Add image descriptions if requested
-        if include_images:
-            images = extract_images_from_docx(file_path)
-            if images:
-                result += "\n\n=== EMBEDDED IMAGES ===\n\n"
-                for i, (img_data, description) in enumerate(images, 1):
-                    result += f"Image {i}: {description}\n\n"
 
         if not result.strip():
             return "No text content found in Word document."
@@ -675,15 +693,34 @@ def extract_pptx(file_path: str, include_images: bool = True) -> str:
     try:
         text_content = []
         presentation = Presentation(file_path)
+        seen_hashes: Set[str] = set()
 
         for slide_num, slide in enumerate(presentation.slides, 1):
             slide_text = [f"=== SLIDE {slide_num} ==="]
 
             for shape in slide.shapes:
+                if include_images and hasattr(shape, "image") and shape.image:
+                    try:
+                        img_data = shape.image.blob
+                        img_hash = compute_image_hash(img_data)
+
+                        if img_hash not in seen_hashes:
+                            seen_hashes.add(img_hash)
+
+                            if USE_GOOGLE_VISION:
+                                description = get_gemini_description(img_data)
+                            else:
+                                description = get_ollama_image_description_from_bytes(img_data)
+
+                            slide_text.append(f"[IMAGE]: {description}")
+                        else:
+                            print(f"Skipping duplicate image on slide {slide_num}")
+                    except Exception as e:
+                        print(f"Error extracting image from slide {slide_num}: {e}")
+
                 if hasattr(shape, "text") and shape.text.strip():
                     slide_text.append(shape.text.strip())
 
-                # Handle tables specifically
                 if shape.has_table:
                     table_text = []
                     for row in shape.table.rows:
@@ -698,20 +735,11 @@ def extract_pptx(file_path: str, include_images: bool = True) -> str:
                         slide_text.append("TABLE:")
                         slide_text.extend(table_text)
 
-            # Add slide content to main text
-            if len(slide_text) > 1:  # More than just the slide header
+            if len(slide_text) > 1:
                 text_content.extend(slide_text)
-                text_content.append("")  # Add blank line between slides
+                text_content.append("")
 
         result = "\n".join(text_content)
-
-        # Add image descriptions if requested
-        if include_images:
-            images = extract_images_from_pptx(file_path)
-            if images:
-                result += "\n\n=== EMBEDDED IMAGES ===\n\n"
-                for i, (img_data, description) in enumerate(images, 1):
-                    result += f"Image {i}: {description}\n\n"
 
         if not result.strip():
             return "No text content found in PowerPoint presentation."
@@ -758,7 +786,7 @@ def read_file_content(file_path: str, include_images: bool = True) -> Tuple[str,
                 file_bytes = f.read()
             description = get_gemini_description(file_bytes)
         else:
-            description = get_image_description(file_path)
+            description = get_ollama_image_description(file_path)
         return description, 'image'
     else:
         raise ValueError(f"Unsupported file type '{file_type}' for {file_path}")
