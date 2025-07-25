@@ -22,7 +22,7 @@ from ..models.document import (
 )
 from ..utils.jwt_helper import get_user_id_from_request, get_user_token, get_admin_token
 from ..utils.processing_tracker import processing_tracker
-from ..utils.file_embedding import read_file_content, get_text_embedding
+from ..utils.file_parsing import read_file_content, get_text_embedding
 
 BACKEND_UPLOAD_DIR = os.getenv("BACKEND_UPLOAD_DIR", "/tmp/uploads")
 LANGFLOW_URL = os.getenv('LANGFLOW_URL')
