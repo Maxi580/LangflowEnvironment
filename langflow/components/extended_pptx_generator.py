@@ -316,7 +316,7 @@ class AtosExtendedTemplatePowerPointComponent(Component):
 
             # Encode to base64 for transmission
             base64_content = base64.b64encode(file_content).decode('utf-8')
-            filename = f"extendd_reference_{self.customer_name.replace(' ', '_').lower()}.pptx"
+            filename = f"extendsd_reference_{self.customer_name.replace(' ', '_').lower()}.pptx"
 
             # Return the response with the encoded file
             text_response = f"""Extended PowerPoint with Technology sections created successfully!
