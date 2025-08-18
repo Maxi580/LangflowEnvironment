@@ -1,3 +1,4 @@
+import base64
 import time
 import os
 import tempfile
@@ -89,6 +90,7 @@ class MessageService:
         print(f"Processing {len(attached_files)} attached files...")
 
         file_contents = []
+        base64_files = []
         for file in attached_files:
             if not file.filename:
                 continue
@@ -97,13 +99,23 @@ class MessageService:
             if file_content:
                 file_contents.append(file_content)
 
+            await file.seek(0)
+            content = await file.read()
+            b64_encoded = base64.b64encode(content).decode('utf-8')
+            file_entry = f"{b64_encoded}"
+            base64_files.append(file_entry)
+
         enhanced_message = original_message.strip()
 
         if file_contents:
             if enhanced_message:
                 enhanced_message = f"{enhanced_message}\n\n=== ATTACHED FILES CONTENT ===\n" + "\n".join(file_contents)
             else:
-                enhanced_message = f"Please analyze the following attached files:\n\n=== ATTACHED FILES CONTENT ===\n" + "\n".join(file_contents)
+                enhanced_message = f"Please analyze the following attached files:\n\n=== ATTACHED FILES CONTENT ===\n" + "\n".join(
+                    file_contents)
+
+        if base64_files:
+            enhanced_message += f"\n\n=== B64 ORIGINAL FILES ===\n" + "\n".join(base64_files)
 
         return enhanced_message
 
@@ -354,4 +366,3 @@ class MessageService:
             )
             user_sessions[session_id] = session
             print(f"Created new session {session_id} for user {user_id} with flow {flow_id}")
-
