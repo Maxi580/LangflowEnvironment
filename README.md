@@ -4,7 +4,7 @@ This repository contains a Docker Compose setup for running Langflow with Ollama
 
 - Install Docker and have it running
 - Go to the root directory and execute the command ```docker compose up -d```
-- Wait until everything is composed, installed and started up. This takes time and is not finished once every container is running, since they need to install services too
+- Wait until everything is composed, installed and started up. The containers themselves also have to install dependencies, so even after every container is started up it takes some time after they are ready.
 - Open the Frontend Container and have it running
 
 ## Services & Access URLs
