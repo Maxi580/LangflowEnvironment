@@ -1,11 +1,11 @@
 # LangFlow Setup Guide
 
 This repository contains a Docker Compose setup for running Langflow with Ollama and Qdrant.
-
+- clone the repository and rename the .env.example to .env
 - Install Docker and have it running
 - Go to the root directory and execute the command ```docker compose up -d```
 - Wait until everything is composed, installed and started up. The containers themselves also have to install dependencies, so even after every container is started up it takes some time after they are ready.
-- Open the Frontend Container and have it running
+- Open the Frontend Container via the Docker UI
 
 ## Services & Access URLs
 
