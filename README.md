@@ -8,10 +8,13 @@
 ## Setup
 
 - The first step is to clone the repository with the command ``git clone https://github.com/Maxi580/LangflowEnvironment.git``
-- After this a terminal must be opened in the project root directory. This is the path where the repository is cloned to
-- In this path the command ``docker compose up -d`` must be executed while the docker engine is running
+- After this go to the project root directory. This is the path where the repository is cloned to
+- The ``.env.example`` needs to be renamed to ``.env`` to be properly recognized. Adjust environment variables like defining a gemini api key for the backend to use for image description. (Alternatively tell the backend to use local llm if wanted)
+- In project open a terminal and execute the command ``docker compose up -d`` must be executed while the docker engine is running
 - The containers are automatically created this can take a while. Even if all containers are created they might still need to install dependecies. This can be checked when clicking on them in the Docker UI. If bugs are encountered a small wait could help
 - Then if all is up and running the below commands help in accessing everything
+- The standard hardcoded login, that should be changed is: Username: admin, Password: admin
+
  
 
 ## Services Access URLs
