@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import fileService from '../../../requests/FileRequests';
 import messageService from '../../../requests/MessageRequests';
 import config from '../../../config';
@@ -18,6 +18,31 @@ const FileManagement = ({
 
   const fileInputRef = useRef(null);
 
+  /**
+   * Fetches both completed and processing files separately
+   */
+  const fetchFiles = useCallback(async () => {
+    if (!flowId) return;
+
+    setIsFilesLoading(true);
+    setFilesError(null);
+
+    try {
+      const [completed, processing] = await Promise.all([
+        fileService.fetchUploadedFiles(flowId),
+        fileService.getProcessingFiles(flowId)
+      ]);
+
+      setCompletedFiles(completed);
+      setProcessingFiles(processing);
+    } catch (err) {
+      console.error("Failed to fetch files:", err);
+      setFilesError(err.message);
+    } finally {
+      setIsFilesLoading(false);
+    }
+  }, [flowId]);
+
   // Fetch files when flowId changes
   useEffect(() => {
     if (flowId) {
@@ -26,7 +51,7 @@ const FileManagement = ({
       setCompletedFiles([]);
       setProcessingFiles([]);
     }
-  }, [flowId]);
+  }, [flowId, fetchFiles]);
 
   // Auto-refresh when there are actively processing files (not failed) using pollingInterval
   useEffect(() => {
@@ -47,32 +72,7 @@ const FileManagement = ({
         clearInterval(intervalId);
       }
     };
-  }, [processingFiles, flowId, pollingInterval]); // Include pollingInterval in dependencies
-
-  /**
-   * Fetches both completed and processing files separately
-   */
-  const fetchFiles = async () => {
-    if (!flowId) return;
-
-    setIsFilesLoading(true);
-    setFilesError(null);
-
-    try {
-      const [completed, processing] = await Promise.all([
-        fileService.fetchUploadedFiles(flowId),
-        fileService.getProcessingFiles(flowId)
-      ]);
-
-      setCompletedFiles(completed);
-      setProcessingFiles(processing);
-    } catch (err) {
-      console.error("Failed to fetch files:", err);
-      setFilesError(err.message);
-    } finally {
-      setIsFilesLoading(false);
-    }
-  };
+  }, [processingFiles, flowId, pollingInterval, fetchFiles]); // Include pollingInterval in dependencies
 
   /**
    * Enhanced file display with status indicators
