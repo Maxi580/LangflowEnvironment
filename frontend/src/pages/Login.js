@@ -11,14 +11,6 @@ const LoginPage = ({ onLoginSuccess }) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [phraseIndex, setPhraseIndex] = useState(0);
 
-  const phrases = [
-    'empower your workflow',
-    'simplify complex tasks',
-    'enhance productivity',
-    'transform information',
-    'unlock knowledge'
-  ];
-
   const textGlowStyle = {
     textShadow: '0 0 3px rgba(130, 220, 255, 0.2)'
   };
@@ -30,6 +22,14 @@ const LoginPage = ({ onLoginSuccess }) => {
   const timerRef = useRef(null);
 
   useEffect(() => {
+    const phrases = [
+      'empower your workflow',
+      'simplify complex tasks',
+      'enhance productivity',
+      'transform information',
+      'unlock knowledge'
+    ];
+
     const handleTyping = () => {
       const currentFullPhrase = phrases[phraseIndex];
 
@@ -60,7 +60,7 @@ const LoginPage = ({ onLoginSuccess }) => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [currentPhrase, isDeleting, phraseIndex, phrases]);
+  }, [currentPhrase, isDeleting, phraseIndex]);
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -174,7 +174,7 @@ const LoginPage = ({ onLoginSuccess }) => {
       const timer = setTimeout(clearMessage, 100);
       return () => clearTimeout(timer);
     }
-  }, [username, password]);
+  }, [username, password, message.text]);
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !isLoading && username && password) {

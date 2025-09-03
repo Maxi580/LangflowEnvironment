@@ -12,7 +12,7 @@ from ..services.flow_service import FlowService
 from ..external.langflow_repository import LangflowRepository
 from ..models.message import MessageRequest, MessageResponse, SessionInfo, ChatSession
 from ..utils.jwt_helper import get_user_id_from_request, get_user_info_from_request
-from ..utils.file_parsing import read_file_content
+from ..utils.file_content_extraction import read_file_content
 
 
 class MessageService:

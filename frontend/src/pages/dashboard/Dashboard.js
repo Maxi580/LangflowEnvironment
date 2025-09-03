@@ -16,7 +16,7 @@ const Dashboard = ({ user }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedFlow, setSelectedFlow] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [files, setFiles] = useState([]);
+  const [files] = useState([]);
   const navigate = useNavigate();
 
   const username = CookieHelper.getUsername() || 'User';

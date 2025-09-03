@@ -1,29 +1,30 @@
-# LangFlow Setup Guide
+# Setup Guide
 
-This repository contains a Docker Compose setup for running Langflow with Ollama and Qdrant.
-- clone the repository and rename the .env.example to .env
-- Install Docker and have it running
-- Go to the root directory and execute the command ```docker compose up -d```
-- Wait until everything is composed, installed and started up. The containers themselves also have to install dependencies, so even after every container is started up it takes some time after they are ready.
-- Open the Frontend Container via the Docker UI
+## Requirements
+- **Git**: To clone the repository (Url: [https://git-scm.com/downloads](https://git-scm.com/downloads))
+- **WSL** (Windows Subsystem for Linux): Needed for Docker (Url: [https://learn.microsoft.com/en-us/windows/wsl/install](https://learn.microsoft.com/en-us/windows/wsl/install))
+- **Docker**: To create the containers and run the system (Url: [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/))
 
-## Services & Access URLs
+## Setup
 
-### For Accessing Services from Your Host Machine
+- The first step is to clone the repository with the command ``git clone https://github.com/Maxi580/LangflowEnvironment.git``
+- After this a terminal must be opened in the root directory of where the repository is cloned to
+- In this path the command ``docker compose up -d`` must be executed while the docker engine is running
+- The containers are automatically created this can take a while. Even if all containers are created they might still need to install dependecies. This can be checked when clicking on them in the Docker UI. If bugs are encountered a small wait could help
+- Then if all is up and running the below commands help in accessing everything
+ 
 
-| Service               | URL                             | Purpose |
-|-----------------------|---------------------------------|---------|
+## Services Access URLs
+
+When the system is locally hosted the following URLs should redirect you to the corresponding service
+
+| Service               | URL                             | Purpose                                   |
+|-----------------------|---------------------------------|-------------------------------------------|
+| Frontend              | http://localhost:3000/          | Main interface for the user (frontend)    |
 | Langflow UI           | http://localhost:7860           | Main interface for building LLM workflows |
-| Ollama API            | http://localhost:11434          | LLM hosting service API endpoint |
-| Ollama Model Overview | http://localhost:11434/api/tags | LLM hosting service API endpoint |
-| Qdrant Dashboard      | http://localhost:6333/dashboard | Vector database dashboard |
-| Qdrant API            | http://localhost:6333           | Vector database API endpoint |
+| Backend UI            | http://localhost:8000/docs      | Interface for the Backend                 |
+| Ollama API            | http://localhost:11434          | LLM hosting service API endpoint          |
+| Ollama Model Overview | http://localhost:11434/api/tags | LLM hosting service API endpoint          |
+| Qdrant Dashboard      | http://localhost:6333/dashboard | Vector database dashboard                 |
+| Qdrant API            | http://localhost:6333           | Vector database API endpoint              |
 
-### For Container-to-Container Communication
-
-When configuring services within Langflow to talk to each other:
-
-| Service | Internal URL                                           | Notes |
-|---------|--------------------------------------------------------|-------|
-| Ollama | http://ollama:11434, http://host.docker.internal:11434 | Used by Langflow to send requests to Ollama |
-| Qdrant | http://qdrant:6333, http://host.docker.internal:6333   | Used by Langflow to connect to Qdrant |
