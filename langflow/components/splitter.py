@@ -18,13 +18,13 @@ class TextBetweenExtractor(Component):
             name="start_keyword",
             display_name="Start Keyword",
             info="The keyword that marks the beginning",
-            value="Business Impact:"
+            value=""
         ),
         StrInput(
             name="end_keyword",
             display_name="End Keyword",
             info="The keyword that marks the end (leave empty to extract until end of text)",
-            value="IT Impact:"
+            value=""
         ),
         BoolInput(
             name="case_sensitive",
