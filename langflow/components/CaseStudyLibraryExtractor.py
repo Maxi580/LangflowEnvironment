@@ -1,6 +1,10 @@
 from langflow.custom import Component
 from langflow.io import Output, MultilineInput
 from langflow.schema import Message
+from pptx.util import Inches
+from pptx.dml.color import RGBColor
+from PIL import Image
+import io
 import base64
 import tempfile
 import os
@@ -127,6 +131,83 @@ class CombinedPPTXExtractorCreator(Component):
 
         return ""
 
+    def find_project_name(self, text_shapes: List[Dict], target_x_cm: float = 1.19, margin_cm: float = 0.2) -> str:
+        """
+        Find the project name at horizontal position 1.19cm - it's the second highest text element in that area
+        """
+        # Convert cm to EMU (English Metric Units used by python-pptx)
+        # 1 cm = 360000 EMU
+        target_x_emu = int(target_x_cm * 360000)
+        margin_emu = int(margin_cm * 360000)
+
+        # Find all text shapes at the target x position (within margin)
+        candidates = []
+
+        for shape in text_shapes:
+            x_distance = abs(shape['left'] - target_x_emu)
+            if x_distance <= margin_emu:
+                candidates.append({
+                    'text': shape['text'],
+                    'top': shape['top'],
+                    'y_position': shape['top']
+                })
+
+        if len(candidates) < 2:
+            return ""  # Need at least 2 elements (sector and project name)
+
+        # Sort by y position (top to bottom)
+        candidates.sort(key=lambda x: x['y_position'])
+
+        # Return the second highest (index 1) - this should be the project name
+        return candidates[1]['text']
+
+    def find_logo_in_area(self, slide, target_x_cm: float = 21.98, target_y_cm: float = 0.46,
+                          width_cm: float = 11.88, height_cm: float = 8.1) -> str:
+        """
+        Find and extract logo from the specified area and return as base64 encoded string
+        """
+        # Convert cm to EMU (English Metric Units used by python-pptx)
+        # 1 cm = 360000 EMU
+        target_x_emu = int(target_x_cm * 360000)
+        target_y_emu = int(target_y_cm * 360000)
+        width_emu = int(width_cm * 360000)
+        height_emu = int(height_cm * 360000)
+
+        # Define the search area bounds
+        left_bound = target_x_emu
+        right_bound = target_x_emu + width_emu
+        top_bound = target_y_emu
+        bottom_bound = target_y_emu + height_emu
+
+        for shape in slide.shapes:
+            # Check if shape is an image/picture
+            if hasattr(shape, 'image'):
+                # Check if the shape is within our target area
+                shape_left = shape.left
+                shape_top = shape.top
+                shape_right = shape.left + shape.width
+                shape_bottom = shape.top + shape.height
+
+                # Check if shape overlaps with our target area
+                if (shape_left < right_bound and shape_right > left_bound and
+                        shape_top < bottom_bound and shape_bottom > top_bound):
+
+                    try:
+                        # Extract the image data
+                        image = shape.image
+                        image_bytes = image.blob
+
+                        # Convert to base64
+                        import base64
+                        base64_content = base64.b64encode(image_bytes).decode('utf-8')
+                        return base64_content
+
+                    except Exception as e:
+                        # If extraction fails, continue to next shape
+                        continue
+
+        return ""  # No logo found in the specified area
+
     def extract_fields_from_slide(self, slide, slide_number: int) -> Dict[str, str]:
         """Extract Challenge, Solution, and Value from a single slide"""
         text_shapes = self.get_text_shapes_from_slide(slide)
@@ -134,11 +215,13 @@ class CombinedPPTXExtractorCreator(Component):
         challenge = self.find_text_below_title(text_shapes, ["Challenge"])
         solution = self.find_text_below_title(text_shapes, ["Solution"])
         business_impact = self.find_text_below_title(text_shapes, ["Value", "Business Benefits"])
+        project_name = self.find_project_name(text_shapes)
+        logo_base64 = self.find_logo_in_area(slide)
 
         return {
             'slide_number': slide_number,
             'customer_name': f"Reference {slide_number}",
-            'project_name': f"Case Study {slide_number}",
+            'project_name': project_name,
             'about_client': "Client information extracted from presentation",
             'challenge_text': challenge,
             'solution_text': solution,
@@ -150,7 +233,7 @@ class CombinedPPTXExtractorCreator(Component):
             'hardware_text': '',
             'network_communication_text': '',
             'technology_used_impact': '',
-            'logo_base64': ''
+            'logo_base64': logo_base64
         }
 
     def has_valid_content(self, slide_data: Dict[str, str]) -> str:
@@ -184,11 +267,102 @@ class CombinedPPTXExtractorCreator(Component):
 
         return replacements_made
 
+    def decode_base64_image(self, base64_string):
+        """
+        Decode base64 image string and return image bytes
+        """
+        try:
+            if base64_string.startswith('data:'):
+                base64_string = base64_string.split(',', 1)[1]
+
+            image_data = base64.b64decode(base64_string)
+
+            img = Image.open(io.BytesIO(image_data))
+
+            # Convert to RGB if necessary (for JPEG compatibility)
+            if img.mode in ('RGBA', 'LA', 'P'):
+                # Create white background
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+                img = background
+
+            img_buffer = io.BytesIO()
+            img.save(img_buffer, format='PNG')
+            img_buffer.seek(0)
+
+            return img_buffer.getvalue(), img.size
+
+        except Exception as e:
+            print(f"Error decoding base64 image: {e}")
+            return None, None
+
+    def add_logo_to_slide(self, slide, logo_base64):
+        """
+        Add logo to slide at fixed position with aspect ratio preservation
+        """
+        if not logo_base64:
+            return False
+
+        try:
+            logo_data, logo_size = self.decode_base64_image(logo_base64)
+            if not logo_data:
+                return False
+
+            # Convert cm to inches (PowerPoint uses inches)
+            cm_to_inches = 0.393701
+
+            # Available space dimensions
+            max_width = Inches(2.87 * cm_to_inches)
+            max_height = Inches(2.53 * cm_to_inches)
+
+            # Position
+            left = Inches(29.81 * cm_to_inches)
+            top = Inches(0.81 * cm_to_inches)
+
+            # Calculate aspect ratio preserving dimensions
+            original_width, original_height = logo_size
+            aspect_ratio = original_width / original_height
+
+            # Fit within the available space while maintaining aspect ratio
+            if aspect_ratio > (max_width / max_height):
+                # Image is wider - fit to width
+                final_width = max_width
+                final_height = max_width / aspect_ratio
+            else:
+                # Image is taller - fit to height
+                final_height = max_height
+                final_width = max_height * aspect_ratio
+
+            # Center the image within the available space
+            centered_left = left + (max_width - final_width) / 2
+            centered_top = top + (max_height - final_height) / 2
+
+            # Save logo to temporary file
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                tmp_file.write(logo_data)
+                tmp_logo_path = tmp_file.name
+
+            try:
+                # Add the logo to the slide with preserved aspect ratio
+                pic = slide.shapes.add_picture(tmp_logo_path, centered_left, centered_top, final_width, final_height)
+                return True
+            finally:
+                try:
+                    os.unlink(tmp_logo_path)
+                except:
+                    pass
+
+        except Exception as e:
+            print(f"Error adding logo to slide: {e}")
+            return False
+
     def create_powerpoint_from_data(self, reference_data: Dict[str, str], reference_index: int) -> str:
         """Create a single PowerPoint from extracted reference data using simple template"""
         try:
             if not os.path.exists(TEMPLATE_PATH):
-                return f"❌ Template file not found at {TEMPLATE_PATH}"
+                return f"Template file not found at {TEMPLATE_PATH}"
 
             prs = Presentation(TEMPLATE_PATH)
 
@@ -203,6 +377,10 @@ class CombinedPPTXExtractorCreator(Component):
 
             for slide_idx, slide in enumerate(prs.slides):
                 self.find_and_replace_text_in_slide(slide, replacements)
+
+                # Add logo to first slide if available
+                if slide_idx == 0 and reference_data['logo_base64']:
+                    self.add_logo_to_slide(slide, reference_data['logo_base64'])
 
             # Save to temporary file
             temp_file = tempfile.NamedTemporaryFile(suffix='.pptx', delete=False)
@@ -222,18 +400,17 @@ class CombinedPPTXExtractorCreator(Component):
             filename = f"reference_{reference_index}_slide_{reference_data['slide_number']}.pptx"
 
             return f"""Reference {reference_index} PowerPoint created successfully!
+    <{PPTX_MAGIC_BYTES}>
+    filename:{filename}
+    content_type:application/vnd.openxmlformats-officedocument.presentationml.presentation
+    size:{len(file_content)}
+    data:{base64_content}
+    </{PPTX_MAGIC_BYTES}>
 
-<{PPTX_MAGIC_BYTES}>
-filename:{filename}
-content_type:application/vnd.openxmlformats-officedocument.presentationml.presentation
-size:{len(file_content)}
-data:{base64_content}
-</{PPTX_MAGIC_BYTES}>
-
-"""
+    """
 
         except Exception as e:
-            return f"❌ Failed to create PowerPoint for reference {reference_index}: {str(e)}\n"
+            return f"Failed to create PowerPoint for reference {reference_index}: {str(e)}\n"
 
     def extract_and_create_from_pptx(self, file_data: bytes, file_index: int) -> Tuple[bool, str, int]:
         """Extract data from PPTX and create PowerPoint files for each valid reference"""
