@@ -1,7 +1,8 @@
 from langflow.custom import Component
-from langflow.io import Output, MultilineInput
+from langflow.io import Output, MultilineInput, SecretStrInput
 from langflow.schema import Message
 from pptx.util import Inches
+import google.generativeai as genai
 from pptx.dml.color import RGBColor
 from PIL import Image
 import io
@@ -9,7 +10,7 @@ import base64
 import tempfile
 import os
 from pptx import Presentation
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Any
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -19,7 +20,7 @@ TEMPLATE_PATH = os.getenv("TEMPLATE_PATH")
 
 
 class CombinedPPTXExtractorCreator(Component):
-    display_name = "Combined PPTX Extractor & PowerPoint Creator"
+    display_name = "Case Study Library Transformator"
     description = "Extracts Challenge/Solution/Value from PPTX and directly creates PowerPoint presentations"
     icon = "🔄"
 
@@ -30,6 +31,7 @@ class CombinedPPTXExtractorCreator(Component):
             info="Comma-separated base64 encoded PPTX file data",
             required=True,
         ),
+        SecretStrInput(name="api_key"),
     ]
 
     outputs = [
@@ -208,6 +210,73 @@ class CombinedPPTXExtractorCreator(Component):
 
         return ""  # No logo found in the specified area
 
+    def analyze_client_agent(self, logo_base64: str, challenge: str, solution: str, business_impact: str,
+                             project_name: str) -> dict:
+        if not self.api_key:
+            return {"customer_name": "Unknown Client", "about_client": "API key not provided"}
+
+        try:
+            genai.configure(api_key=self.api_key)
+            model = genai.GenerativeModel("gemini-2.5-flash")
+
+            content = []
+
+            if logo_base64:
+                logo_bytes = base64.b64decode(logo_base64)
+                content.append({
+                    "mime_type": "image/png",
+                    "data": logo_bytes
+                })
+
+            prompt = f"""
+            Your Job is to research Companies. You want to create small Informational texts about them that contain the following Information:
+
+            Based on this company logo (if provided) and project details:
+            Project: {project_name}
+            Challenge: {challenge}
+            Solution: {solution}
+            Business Impact: {business_impact}
+
+            Research and provide:
+            1. COMPANY_NAME: Full company name (research full name if only acronym visible)
+            2. ABOUT_CLIENT: Concise description (75-100 tokens) covering:
+               - Basic Information: Type of organization, subsidiaries/ownership
+               - Business Model: Core business, market position, geographic operations
+               - Financials: Annual revenue (€), employee count
+               - Transformation: Industry challenges/trends
+
+            Format your response exactly as:
+            COMPANY_NAME: [company name]
+            ABOUT_CLIENT: [75-100 token description in continuous text, no line breaks]
+            """
+
+            content.append(prompt)
+
+            response = model.generate_content(content)
+            return self.parse_ai_response(response.text)
+
+        except Exception as e:
+            return {"customer_name": "Unknown Client", "about_client": f"Analysis failed: {str(e)}"}
+
+    def parse_ai_response(self, response_text: str) -> dict:
+        try:
+            lines = response_text.strip().split('\n')
+            company_name = "Unknown Client"
+            about_client = "Company analysis not available"
+
+            for line in lines:
+                if line.startswith("COMPANY_NAME:"):
+                    company_name = line.replace("COMPANY_NAME:", "").strip()
+                elif line.startswith("ABOUT_CLIENT:"):
+                    about_client = line.replace("ABOUT_CLIENT:", "").strip()
+
+            return {
+                "customer_name": company_name,
+                "about_client": about_client
+            }
+        except:
+            return {"customer_name": "Unknown Client", "about_client": "Parsing failed"}
+
     def extract_fields_from_slide(self, slide, slide_number: int) -> Dict[str, str]:
         """Extract Challenge, Solution, and Value from a single slide"""
         text_shapes = self.get_text_shapes_from_slide(slide)
@@ -217,12 +286,13 @@ class CombinedPPTXExtractorCreator(Component):
         business_impact = self.find_text_below_title(text_shapes, ["Value", "Business Benefits"])
         project_name = self.find_project_name(text_shapes)
         logo_base64 = self.find_logo_in_area(slide)
+        analysis_result = self.analyze_client_agent(logo_base64, challenge, solution, business_impact, project_name)
 
         return {
             'slide_number': slide_number,
-            'customer_name': f"Reference {slide_number}",
+            'customer_name': analysis_result.get('customer_name', f"Unknown Client at Reference {slide_number}"),
             'project_name': project_name,
-            'about_client': "Client information extracted from presentation",
+            'about_client': analysis_result.get('about_client', "Client information extracted from presentation"),
             'challenge_text': challenge,
             'solution_text': solution,
             'impact_text': business_impact,
@@ -397,7 +467,14 @@ class CombinedPPTXExtractorCreator(Component):
 
             # Encode to base64
             base64_content = base64.b64encode(file_content).decode('utf-8')
-            filename = f"reference_{reference_index}_slide_{reference_data['slide_number']}.pptx"
+
+            client_name = reference_data['customer_name']
+            safe_client_name = "".join(c for c in client_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            safe_client_name = safe_client_name.replace(' ', '_')
+            if safe_client_name and safe_client_name != "Unknown_Client":
+                filename = f"{safe_client_name}_slide_{reference_data['slide_number']}.pptx"
+            else:
+                filename = f"reference_{reference_index}_slide_{reference_data['slide_number']}.pptx"
 
             return f"""Reference {reference_index} PowerPoint created successfully!
     <{PPTX_MAGIC_BYTES}>
