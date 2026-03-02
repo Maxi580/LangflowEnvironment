@@ -25,7 +25,6 @@ const OutputSettings = ({ onSettingsChange }) => {
   const [language, setLanguage] = useState('');
   const [textLength, setTextLength] = useState(500);
   const [createPptx, setCreatePptx] = useState(false);
-  const [includeSpeakerNotes, setIncludeSpeakerNotes] = useState(false);
 
   const TEXT_LENGTH_MIN = 100;
   const TEXT_LENGTH_MAX = 5000;
@@ -36,7 +35,6 @@ const OutputSettings = ({ onSettingsChange }) => {
       language: updates.language ?? language,
       textLength: updates.textLength ?? textLength,
       createPptx: updates.createPptx ?? createPptx,
-      includeSpeakerNotes: updates.includeSpeakerNotes ?? includeSpeakerNotes,
     };
     onSettingsChange && onSettingsChange(newSettings);
   };
@@ -66,26 +64,8 @@ const OutputSettings = ({ onSettingsChange }) => {
   const handleCreatePptxChange = (e) => {
     const val = e.target.checked;
     setCreatePptx(val);
-    if (!val) {
-      setIncludeSpeakerNotes(false);
-      notifyChange({ createPptx: val, includeSpeakerNotes: false });
-    } else {
-      notifyChange({ createPptx: val });
-    }
+    notifyChange({ createPptx: val });
   };
-
-  const handleSpeakerNotesChange = (e) => {
-    const val = e.target.checked;
-    setIncludeSpeakerNotes(val);
-    notifyChange({ includeSpeakerNotes: val });
-  };
-
-  // Count how many settings are actively configured
-  const activeCount = [
-    language !== '',
-    textLength !== 500,
-    createPptx,
-  ].filter(Boolean).length;
 
   return (
     <div className="bg-slate-800 rounded-xl overflow-hidden">
@@ -105,12 +85,6 @@ const OutputSettings = ({ onSettingsChange }) => {
         </div>
 
         <div className="flex items-center space-x-2">
-          {activeCount > 0 && (
-            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-900/30 text-emerald-400">
-              {activeCount} active
-            </span>
-          )}
-
           <button
             onClick={() => setIsExpanded(!isExpanded)}
             className="p-1 hover:bg-slate-600 rounded transition-colors"
@@ -265,41 +239,6 @@ const OutputSettings = ({ onSettingsChange }) => {
                   <p className="text-xs text-slate-500">Generate a PowerPoint presentation from the output</p>
                 </div>
               </label>
-
-              {/* Speaker Notes — only visible when createPptx is checked */}
-              {createPptx && (
-                <label className="flex items-center space-x-3 cursor-pointer group ml-8">
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      checked={includeSpeakerNotes}
-                      onChange={handleSpeakerNotesChange}
-                      className="sr-only peer"
-                    />
-                    <div className="w-5 h-5 bg-slate-700 border border-slate-600 rounded
-                                    peer-checked:bg-emerald-600 peer-checked:border-emerald-600
-                                    peer-focus:ring-2 peer-focus:ring-emerald-500 peer-focus:ring-offset-2 peer-focus:ring-offset-slate-800
-                                    transition-colors group-hover:border-slate-500">
-                    </div>
-                    <svg
-                      className={`absolute top-0.5 left-0.5 w-4 h-4 text-white pointer-events-none transition-opacity ${
-                        includeSpeakerNotes ? 'opacity-100' : 'opacity-0'
-                      }`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <div>
-                    <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
-                      Include speaker notes
-                    </span>
-                    <p className="text-xs text-slate-500">Add explanatory notes to each slide</p>
-                  </div>
-                </label>
-              )}
             </div>
           </div>
 
