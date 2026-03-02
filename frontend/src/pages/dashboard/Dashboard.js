@@ -7,6 +7,7 @@ import FlowManagement from './components/FlowManagement';
 import DeleteConfirmation from './components/DeleteConfirmation';
 import ChatManagement from "./components/ChatManagement";
 import FileManagement from "./components/FileManagement";
+import OutputSettings from "./components/OutputSettings";
 import config from '../../config';
 import CookieHelper from "../../utils/CookieHelper";
 
@@ -17,6 +18,7 @@ const Dashboard = ({ user }) => {
   const [selectedFlow, setSelectedFlow] = useState(null);
   const [messages, setMessages] = useState([]);
   const [files] = useState([]);
+  const [outputSettings, setOutputSettings] = useState({});
   const navigate = useNavigate();
 
   const username = CookieHelper.getUsername() || 'User';
@@ -101,7 +103,6 @@ const Dashboard = ({ user }) => {
 
           <div className="flex flex-col items-center">
             <h1 className="text-xl font-bold text-white">Agenten Dashboard</h1>
-            {/* 🔧 Use username from user prop */}
             <span className="text-slate-300 text-sm mt-1">
               Welcome, {username || 'User'}
             </span>
@@ -151,11 +152,12 @@ const Dashboard = ({ user }) => {
               />
             </div>
 
-            <div className="w-80 flex-shrink-0">
+            <div className="w-80 flex-shrink-0 space-y-4 overflow-y-auto">
               <FileManagement
                 flowId={selectedFlow?.id}
                 setMessages={setMessages}
               />
+              <OutputSettings onSettingsChange={setOutputSettings} />
             </div>
           </div>
         </div>
