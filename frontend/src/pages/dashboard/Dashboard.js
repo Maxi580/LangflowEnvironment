@@ -149,6 +149,7 @@ const Dashboard = ({ user }) => {
                 files={files}
                 messages={messages}
                 setMessages={setMessages}
+                outputSettings={outputSettings}
               />
             </div>
 

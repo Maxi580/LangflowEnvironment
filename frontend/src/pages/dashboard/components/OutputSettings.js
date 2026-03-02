@@ -23,8 +23,8 @@ const LANGUAGE_SUGGESTIONS = [
 const OutputSettings = ({ onSettingsChange }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [language, setLanguage] = useState('');
-  const [textLength, setTextLength] = useState(500);
-  const [createPptx, setCreatePptx] = useState(false);
+  const [textLength, setTextLength] = useState(null);
+  const [createPptx, setCreatePptx] = useState(true);
 
   const TEXT_LENGTH_MIN = 100;
   const TEXT_LENGTH_MAX = 5000;
@@ -53,7 +53,11 @@ const OutputSettings = ({ onSettingsChange }) => {
 
   const handleTextLengthInput = (e) => {
     const raw = e.target.value;
-    if (raw === '') return;
+    if (raw === '') {
+      setTextLength(null);
+      notifyChange({ textLength: null });
+      return;
+    }
     let val = parseInt(raw, 10);
     if (isNaN(val)) return;
     val = Math.max(1, val);
@@ -160,10 +164,11 @@ const OutputSettings = ({ onSettingsChange }) => {
                 <div className="flex items-center space-x-2">
                   <input
                     type="number"
-                    value={textLength}
+                    value={textLength ?? ''}
                     onChange={handleTextLengthInput}
                     min={1}
                     step={TEXT_LENGTH_STEP}
+                    placeholder="—"
                     className="w-24 bg-slate-700 border border-slate-600 text-white text-sm text-center rounded-lg
                                px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent
                                transition-colors hover:border-slate-500
@@ -174,7 +179,7 @@ const OutputSettings = ({ onSettingsChange }) => {
             </label>
             <input
               type="range"
-              value={Math.min(textLength, TEXT_LENGTH_MAX)}
+              value={Math.min(textLength || TEXT_LENGTH_MIN, TEXT_LENGTH_MAX)}
               onChange={handleTextLengthSlider}
               min={TEXT_LENGTH_MIN}
               max={TEXT_LENGTH_MAX}

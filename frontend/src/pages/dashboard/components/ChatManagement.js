@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import messageService from '../../../requests/MessageRequests';
 
-const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => {
+const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outputSettings = {} }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
@@ -147,6 +147,35 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => 
     );
   };
 
+  /**
+   * Builds a prefix string from the output settings to prepend to the user message.
+   */
+  const buildSettingsPrefix = () => {
+    const parts = [];
+
+    // Language
+    const lang = outputSettings.language?.trim();
+    if (lang) {
+      parts.push(`The user wants the text to be written in ${lang}.`);
+    } else {
+      parts.push('The user wants the text to be written in the language that the documents are made of.');
+    }
+
+    // Text length
+    const length = outputSettings.textLength;
+    if (length) {
+      parts.push(`The user wants the text to be approximately ${length} words long.`);
+    } else {
+      parts.push('The user has not specified a desired text length. Use a reasonable default.');
+    }
+
+    // PPTX
+    const pptx = outputSettings.createPptx ?? true;
+    parts.push(`{create_pptx: ${pptx}}`);
+
+    return `[Output Settings]\n${parts.join('\n')}\n[End of Output Settings]\n\n`;
+  };
+
   const handleSendMessage = async () => {
     if (!inputMessage.trim() && attachedFiles.length === 0) return;
 
@@ -175,8 +204,9 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages }) => 
       setAttachedFiles([]);
 
       // Send to backend via MessageService with files
+      const prefixedMessage = buildSettingsPrefix() + currentMessage;
       const botResponse = await messageService.sendMessageWithFiles(
-        currentMessage,
+        prefixedMessage,
         selectedFlow.id,
         files,
         currentFiles
