@@ -101,11 +101,14 @@ const Dashboard = ({ user }) => {
             </button>
           </div>
 
-          <div className="flex flex-col items-center">
-            <h1 className="text-xl font-bold text-white">Agenten Dashboard</h1>
-            <span className="text-slate-300 text-sm mt-1">
-              Welcome, {username || 'User'}
-            </span>
+          <div className="flex items-center space-x-3">
+            <img src="/logo.png" alt="Atos" className="h-8 opacity-80" />
+            <div className="flex flex-col items-center">
+              <h1 className="text-xl font-bold text-white">Agenten Dashboard</h1>
+              <span className="text-slate-300 text-sm mt-1">
+                Welcome, {username || 'User'}
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center space-x-2">
