@@ -84,7 +84,7 @@ const Dashboard = ({ user }) => {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{backgroundColor: '#0073E6'}}>
+    <div className="h-screen flex flex-col overflow-hidden" style={{backgroundColor: '#ffffff'}}>
       <header style={{backgroundColor: '#00005C'}} className="border-b border-slate-700 px-4 py-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
@@ -112,7 +112,7 @@ const Dashboard = ({ user }) => {
           <div className="flex items-center space-x-2">
             <button
               onClick={() => langflowRedirectService.redirectToLangflow("/flows", true)}
-              className="px-4 py-2 text-white rounded transition-colors flex items-center space-x-2" style={{backgroundColor: '#6B3FA0'}}
+              className="px-4 py-2 text-white rounded transition-colors flex items-center space-x-2" style={{backgroundColor: '#3DC7FF'}}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
