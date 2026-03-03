@@ -154,9 +154,9 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
     const parts = [];
 
     // Language
-    const lang = outputSettings.language?.trim();
-    if (lang) {
-      parts.push(`The user wants the text to be written in ${lang}.`);
+    const langs = outputSettings.languages || [];
+    if (langs.length > 0) {
+      parts.push(`The user wants the text to be written in ${langs.join(', ')}.`);
     } else {
       parts.push('The user wants the text to be written in the language that the documents are made of.');
     }

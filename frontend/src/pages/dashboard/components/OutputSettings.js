@@ -22,7 +22,8 @@ const LANGUAGE_SUGGESTIONS = [
 
 const OutputSettings = ({ onSettingsChange }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [language, setLanguage] = useState('');
+  const [languages, setLanguages] = useState([]);
+  const [languageInput, setLanguageInput] = useState('');
   const [textLength, setTextLength] = useState(null);
   const [createPptx, setCreatePptx] = useState(true);
 
@@ -32,17 +33,37 @@ const OutputSettings = ({ onSettingsChange }) => {
 
   const notifyChange = (updates) => {
     const newSettings = {
-      language: updates.language ?? language,
+      languages: updates.languages ?? languages,
       textLength: updates.textLength ?? textLength,
       createPptx: updates.createPptx ?? createPptx,
     };
     onSettingsChange && onSettingsChange(newSettings);
   };
 
-  const handleLanguageChange = (e) => {
-    const val = e.target.value;
-    setLanguage(val);
-    notifyChange({ language: val });
+  const handleAddLanguage = (value) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    if (languages.some(l => l.toLowerCase() === trimmed.toLowerCase())) return;
+    const updated = [...languages, trimmed];
+    setLanguages(updated);
+    setLanguageInput('');
+    notifyChange({ languages: updated });
+  };
+
+  const handleRemoveLanguage = (index) => {
+    const updated = languages.filter((_, i) => i !== index);
+    setLanguages(updated);
+    notifyChange({ languages: updated });
+  };
+
+  const handleLanguageKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddLanguage(languageInput);
+    }
+    if (e.key === 'Backspace' && languageInput === '' && languages.length > 0) {
+      handleRemoveLanguage(languages.length - 1);
+    }
   };
 
   const handleTextLengthSlider = (e) => {
@@ -120,34 +141,49 @@ const OutputSettings = ({ onSettingsChange }) => {
                 <span>Output Language</span>
               </div>
             </label>
-            <div className="relative">
-              <input
-                type="text"
-                list="language-suggestions"
-                value={language}
-                onChange={handleLanguageChange}
-                placeholder="Auto (same as input)"
-                className="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg
-                           px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent
-                           transition-colors hover:border-slate-500 placeholder-slate-500"
-              />
+            <div className="w-full bg-slate-700 border border-slate-600 rounded-lg
+                           px-3 py-2 focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-transparent
+                           transition-colors hover:border-slate-500">
+              {/* Language tags */}
+              <div className="flex flex-wrap gap-1.5">
+                {languages.map((lang, index) => (
+                  <span
+                    key={index}
+                    className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-600/30 text-emerald-300 text-sm"
+                  >
+                    {lang}
+                    <button
+                      onClick={() => handleRemoveLanguage(index)}
+                      className="ml-1.5 text-emerald-400 hover:text-white transition-colors"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                ))}
+                <input
+                  type="text"
+                  list="language-suggestions"
+                  value={languageInput}
+                  onChange={(e) => setLanguageInput(e.target.value)}
+                  onKeyDown={handleLanguageKeyDown}
+                  onBlur={() => handleAddLanguage(languageInput)}
+                  placeholder={languages.length === 0 ? "Auto (same as input)" : "Add another..."}
+                  className="flex-1 min-w-[100px] bg-transparent text-white text-sm outline-none placeholder-slate-500 py-0.5"
+                />
+              </div>
               <datalist id="language-suggestions">
-                {LANGUAGE_SUGGESTIONS.map((lang) => (
+                {LANGUAGE_SUGGESTIONS.filter(
+                  s => !languages.some(l => l.toLowerCase() === s.toLowerCase())
+                ).map((lang) => (
                   <option key={lang} value={lang} />
                 ))}
               </datalist>
-              {language && (
-                <button
-                  onClick={() => { setLanguage(''); notifyChange({ language: '' }); }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-white transition-colors"
-                  title="Clear"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
             </div>
+            {languages.length > 0 && (
+              <p className="text-xs text-slate-500 mt-1">Press Enter to add · Backspace to remove last</p>
+            )}
           </div>
 
           {/* ── Text Length ── */}
