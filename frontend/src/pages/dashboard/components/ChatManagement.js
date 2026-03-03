@@ -328,7 +328,7 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
       }
 
       return (
-        <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5 text-[#3DC7FF]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
@@ -343,12 +343,12 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
         <div
           className={`max-w-3xl rounded-2xl px-4 py-3 break-words ${
             isUser
-              ? 'bg-blue-600 text-white'
+              ? 'bg-[#0073E6] text-white'
               : isSystem
-              ? 'bg-green-700 text-green-100'
+              ? 'bg-[#0073E6]/80 text-white'
               : isError
               ? 'bg-red-700 text-red-100'
-              : 'bg-slate-700 text-slate-200'
+              : 'bg-[#001070] text-gray-200'
           }`}
         >
           <div
@@ -360,7 +360,7 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
 
           {/* User attached files */}
           {hasAttachments && (
-            <div className="mt-2 pt-2 border-t border-blue-500 opacity-75">
+            <div className="mt-2 pt-2 border-t border-[#3DC7FF] opacity-75">
               <div className="text-xs mb-1">📎 Attached files:</div>
               {message.metadata.attachedFiles.map((file, idx) => (
                 <div key={idx} className="text-xs flex items-center space-x-1">
@@ -373,12 +373,12 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
 
           {/* Generated files from bot */}
           {hasGeneratedFiles && (
-          <div className="mt-3 pt-2 border-t border-slate-500">
-            <div className="text-xs mb-2 text-slate-300">
+          <div className="mt-3 pt-2 border-t border-[#003399]">
+            <div className="text-xs mb-2 text-gray-300">
               📄 Generated file{message.metadata.generatedFiles.length > 1 ? 's' : ''}:
             </div>
             {message.metadata.generatedFiles.map((generatedFile, index) => (
-              <div key={index} className="bg-slate-600 rounded-lg p-3 hover:bg-slate-550 transition-colors mb-2 last:mb-0">
+              <div key={index} className="bg-[#001a8a] rounded-lg p-3 hover:bg-[#001570] transition-colors mb-2 last:mb-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     {getFileTypeIcon(generatedFile.filename, generatedFile.content_type)}
@@ -386,7 +386,7 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
                       <div className="text-sm font-medium text-white">
                         {generatedFile.filename}
                       </div>
-                      <div className="text-xs text-slate-400">
+                      <div className="text-xs text-gray-400">
                         {formatFileSize(generatedFile.size)} • {generatedFile.content_type.split('/').pop().toUpperCase()}
                       </div>
                     </div>
@@ -394,7 +394,7 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
 
                   <button
                     onClick={() => handleDownload(generatedFile)}
-                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs
+                    className="px-3 py-1 bg-[#0073E6] hover:bg-[#005bb5] text-white rounded text-xs
                              transition-colors flex items-center space-x-1"
                     title="Download file"
                   >
@@ -420,14 +420,14 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
 
   const renderEmptyState = () => (
     <div className="flex flex-col items-center justify-center h-full text-center">
-      <div className="w-16 h-16 mb-4 rounded-full bg-gradient-to-r from-purple-500 to-blue-600 flex items-center justify-center">
+      <div className="w-16 h-16 mb-4 rounded-full bg-gradient-to-r from-[#0073E6] to-[#3DC7FF] flex items-center justify-center">
         <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
       </div>
       <h3 className="text-xl font-bold text-white mb-2">Ready to Chat</h3>
-      <p className="text-slate-400 max-w-md mb-4">
+      <p className="text-gray-400 max-w-md mb-4">
         {selectedFlow
           ? `Selected flow: "${selectedFlow.name}". Start typing or drag files to begin your conversation.`
           : 'Please select a flow from the dropdown above to start chatting with your AI agent.'
@@ -438,12 +438,12 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
 
   const renderLoadingIndicator = () => (
     <div className="flex justify-start">
-      <div className="bg-slate-700 text-slate-200 rounded-2xl px-4 py-3">
+      <div className="bg-[#001070] text-gray-200 rounded-2xl px-4 py-3">
         <div className="flex items-center space-x-2">
           <div className="flex space-x-1">
-            <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce"></div>
-            <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-            <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+            <div className="w-2 h-2 rounded-full bg-[#3DC7FF] animate-bounce"></div>
+            <div className="w-2 h-2 rounded-full bg-[#3DC7FF] animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            <div className="w-2 h-2 rounded-full bg-[#3DC7FF] animate-bounce" style={{ animationDelay: '0.4s' }}></div>
           </div>
           <span className="text-sm">Thinking...</span>
         </div>
@@ -453,8 +453,8 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
 
   return (
     <div
-      className={`w-full h-full bg-slate-800 border border-slate-700 rounded-xl shadow-lg overflow-hidden flex flex-col relative ${
-        isDragging ? 'border-blue-500 border-2' : ''
+      className={`w-full h-full bg-[#000847] border border-[#002090] rounded-xl shadow-lg overflow-hidden flex flex-col relative ${
+        isDragging ? 'border-[#3DC7FF] border-2' : ''
       }`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -462,25 +462,25 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
     >
       {/* Drag overlay */}
       {isDragging && (
-        <div className="absolute inset-0 bg-blue-600 bg-opacity-20 z-10 flex items-center justify-center">
-          <div className="bg-slate-800 rounded-lg p-6 border-2 border-dashed border-blue-400">
+        <div className="absolute inset-0 bg-[#0073E6] bg-opacity-20 z-10 flex items-center justify-center">
+          <div className="bg-[#000847] rounded-lg p-6 border-2 border-dashed border-[#3DC7FF]">
             <div className="text-center">
-              <svg className="w-12 h-12 text-blue-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-12 h-12 text-[#3DC7FF] mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
-              <p className="text-blue-400 font-medium">Drop files here to attach</p>
-              <p className="text-slate-400 text-sm">Max 25MB per file</p>
+              <p className="text-[#3DC7FF] font-medium">Drop files here to attach</p>
+              <p className="text-gray-400 text-sm">Max 25MB per file</p>
             </div>
           </div>
         </div>
       )}
 
       {/* Chat Header */}
-      <div className="bg-slate-700 px-4 py-3 border-b border-slate-600 flex-shrink-0">
+      <div className="bg-[#001070] px-4 py-3 border-b border-[#002090] flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="p-2 bg-blue-600 rounded-lg">
+            <div className="p-2 bg-[#0073E6] rounded-lg">
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -488,7 +488,7 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
             </div>
             <div>
               <h3 className="text-white font-medium">Chat Interface</h3>
-              <p className="text-slate-400 text-sm">
+              <p className="text-gray-400 text-sm">
                 {selectedFlow ? `Using: ${selectedFlow.name}` : 'No flow selected'}
               </p>
             </div>
@@ -498,7 +498,7 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
             {messages.length > 0 && (
               <button
                 onClick={clearChat}
-                className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-slate-200 rounded transition-colors text-sm"
+                className="px-3 py-1 bg-[#001a8a] hover:bg-[#0025a0] text-gray-200 rounded transition-colors text-sm"
                 title="Clear chat"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -507,7 +507,7 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
                 </svg>
               </button>
             )}
-            <div className="text-slate-400 text-sm">
+            <div className="text-gray-400 text-sm">
               {messages.length} messages
             </div>
           </div>
@@ -515,7 +515,7 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
       </div>
 
       {/* Messages Display */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900 min-h-0">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#00005C] min-h-0">
         {messages.length === 0 ? (
           renderEmptyState()
         ) : (
@@ -529,9 +529,9 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
 
       {/* Attached Files Preview */}
       {attachedFiles.length > 0 && (
-        <div className="px-4 py-2 bg-slate-750 border-t border-slate-600">
+        <div className="px-4 py-2 bg-[#000d60] border-t border-[#002090]">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-300">
+            <span className="text-sm text-gray-300">
               {attachedFiles.length} file{attachedFiles.length > 1 ? 's' : ''} attached
             </span>
             <button
@@ -545,11 +545,11 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
             {attachedFiles.map((file, index) => (
               <div
                 key={index}
-                className="flex items-center space-x-2 bg-slate-600 rounded px-2 py-1 text-sm"
+                className="flex items-center space-x-2 bg-[#001a8a] rounded px-2 py-1 text-sm"
               >
                 {getFileIcon(file)}
-                <span className="text-slate-200 truncate max-w-32">{file.name}</span>
-                <span className="text-slate-400 text-xs">({formatFileSize(file.size)})</span>
+                <span className="text-gray-200 truncate max-w-32">{file.name}</span>
+                <span className="text-gray-400 text-xs">({formatFileSize(file.size)})</span>
                 <button
                   onClick={() => removeAttachedFile(index)}
                   className="text-red-400 hover:text-red-300 ml-1"
@@ -565,14 +565,14 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
       )}
 
       {/* Input Area */}
-      <div className="border-t border-slate-700 p-4 bg-slate-800 flex-shrink-0">
+      <div className="border-t border-[#002090] p-4 bg-[#000847] flex-shrink-0">
         <div className="flex space-x-2">
           {/* File upload button */}
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isSending || !selectedFlow}
-            className="px-3 py-2 bg-slate-600 hover:bg-slate-500 disabled:opacity-50
-                     disabled:cursor-not-allowed text-slate-200 rounded-lg transition-colors
+            className="px-3 py-2 bg-[#001a8a] hover:bg-[#0025a0] disabled:opacity-50
+                     disabled:cursor-not-allowed text-gray-200 rounded-lg transition-colors
                      self-end"
             title="Attach files"
           >
@@ -588,9 +588,9 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyDown={handleKeyPress}
             placeholder={selectedFlow ? "Type your message or attach files... (Shift+Enter for new line)" : "Select a flow first..."}
-            className="flex-1 px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg
-                     text-white placeholder-slate-400 focus:outline-none
-                     focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+            className="flex-1 px-4 py-2 bg-[#001070] border border-[#002090] rounded-lg
+                     text-white placeholder-gray-400 focus:outline-none
+                     focus:ring-2 focus:ring-[#3DC7FF] focus:border-[#3DC7FF]
                      resize-none min-h-[40px] max-h-32 overflow-y-auto"
             disabled={isSending || !selectedFlow}
             rows={1}
@@ -607,7 +607,7 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
           <button
             onClick={handleSendMessage}
             disabled={isSending || (!inputMessage.trim() && attachedFiles.length === 0) || !selectedFlow}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50
+            className="px-4 py-2 bg-[#0073E6] hover:bg-[#005bb5] disabled:opacity-50
                      disabled:cursor-not-allowed text-white rounded-lg transition-colors
                      flex items-center space-x-2 self-end"
           >
@@ -630,14 +630,14 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
 
         {/* Info Bar */}
         {selectedFlow && (
-          <div className="mt-2 text-xs text-slate-400 flex items-center justify-between">
+          <div className="mt-2 text-xs text-gray-400 flex items-center justify-between">
             <span>Enter to send • Shift+Enter for new line • Drag & drop files</span>
             <div className="flex items-center space-x-4">
               {files.length > 0 && (
                 <span>{files.length} collection file{files.length > 1 ? 's' : ''}</span>
               )}
               {attachedFiles.length > 0 && (
-                <span className="text-blue-400">{attachedFiles.length} attached</span>
+                <span className="text-[#3DC7FF]">{attachedFiles.length} attached</span>
               )}
             </div>
           </div>

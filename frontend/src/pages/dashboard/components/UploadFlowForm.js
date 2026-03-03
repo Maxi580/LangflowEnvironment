@@ -80,10 +80,10 @@ const UploadFlowForm = ({ onUpload, onClose, isUploading, uploadError }) => {
       <div
         className={`border-2 border-dashed rounded-lg p-6 text-center mb-4 transition-colors
           ${isDragging 
-            ? 'border-blue-500 bg-blue-500/10' 
+            ? 'border-[#3DC7FF] bg-blue-500/10' 
             : selectedFile 
-              ? 'border-green-500 bg-green-500/10' 
-              : 'border-slate-600 hover:border-slate-500'
+              ? 'border-[#3DC7FF] bg-[#3DC7FF]/10' 
+              : 'border-[#002090] hover:border-[#003399]'
           }`}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
@@ -98,7 +98,7 @@ const UploadFlowForm = ({ onUpload, onClose, isUploading, uploadError }) => {
               </svg>
             </div>
             <div className="text-white font-medium">{selectedFile.name}</div>
-            <div className="text-slate-400 text-sm mt-1">
+            <div className="text-gray-400 text-sm mt-1">
               {(selectedFile.size / 1024).toFixed(1)} KB
             </div>
             <button
@@ -110,15 +110,15 @@ const UploadFlowForm = ({ onUpload, onClose, isUploading, uploadError }) => {
           </div>
         ) : (
           <div className="py-4">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-slate-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
             <p className="text-white mb-1">Drop your flow JSON file here</p>
-            <p className="text-slate-400 text-sm mb-3">or</p>
+            <p className="text-gray-400 text-sm mb-3">or</p>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors"
+              className="px-4 py-2 bg-[#0073E6] hover:bg-[#005bb5] text-white rounded-lg text-sm transition-colors"
             >
               Select File
             </button>
@@ -136,7 +136,7 @@ const UploadFlowForm = ({ onUpload, onClose, isUploading, uploadError }) => {
       {/* Flow details form */}
       <div className="space-y-4">
         <div>
-          <label htmlFor="flowName" className="block text-sm font-medium text-slate-300 mb-1">
+          <label htmlFor="flowName" className="block text-sm font-medium text-gray-300 mb-1">
             Flow Name <span className="text-red-500">*</span>
           </label>
           <input
@@ -144,22 +144,22 @@ const UploadFlowForm = ({ onUpload, onClose, isUploading, uploadError }) => {
             id="flowName"
             value={flowName}
             onChange={(e) => setFlowName(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white
-                      focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-3 py-2 bg-[#001070] border border-[#002090] rounded-md text-white
+                      focus:outline-none focus:ring-2 focus:ring-[#3DC7FF] focus:border-[#3DC7FF]"
             placeholder="Enter flow name"
           />
         </div>
 
         <div>
-          <label htmlFor="flowDescription" className="block text-sm font-medium text-slate-300 mb-1">
+          <label htmlFor="flowDescription" className="block text-sm font-medium text-gray-300 mb-1">
             Description
           </label>
           <textarea
             id="flowDescription"
             value={flowDescription}
             onChange={(e) => setFlowDescription(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white
-                      focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+            className="w-full px-3 py-2 bg-[#001070] border border-[#002090] rounded-md text-white
+                      focus:outline-none focus:ring-2 focus:ring-[#3DC7FF] focus:border-[#3DC7FF]
                       min-h-[80px]"
             placeholder="Enter flow description (optional)"
           />
@@ -178,7 +178,7 @@ const UploadFlowForm = ({ onUpload, onClose, isUploading, uploadError }) => {
         <button
           type="button"
           onClick={onClose}
-          className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md transition-colors"
+          className="px-4 py-2 bg-[#001070] hover:bg-[#001a8a] text-white rounded-md transition-colors"
         >
           Cancel
         </button>
@@ -189,8 +189,8 @@ const UploadFlowForm = ({ onUpload, onClose, isUploading, uploadError }) => {
           disabled={isUploading || !selectedFile}
           className={`px-4 py-2 rounded-md transition-colors flex items-center
             ${isUploading || !selectedFile
-              ? 'bg-blue-700/50 text-blue-300/70 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 text-white'
+              ? 'bg-[#0073E6]/50 text-[#3DC7FF]/70 cursor-not-allowed'
+              : 'bg-[#0073E6] hover:bg-[#005bb5] text-white'
             }`}
         >
           {isUploading ? (

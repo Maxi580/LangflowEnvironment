@@ -22,13 +22,13 @@ class AuthErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="min-h-screen bg-[#00005C] flex items-center justify-center">
           <div className="text-center">
             <h2 className="text-xl text-red-400 mb-4">Authentication Error</h2>
-            <p className="text-slate-300 mb-4">Please try refreshing the page</p>
+            <p className="text-gray-300 mb-4">Please try refreshing the page</p>
             <button
               onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-sky-500 text-white rounded hover:bg-sky-600"
+              className="px-4 py-2 bg-[#0073E6] text-white rounded hover:bg-[#005bb5]"
             >
               Refresh Page
             </button>

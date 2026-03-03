@@ -6,7 +6,7 @@ const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, isLoading, userna
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full mx-4 border border-slate-700">
+      <div className="bg-[#000847] rounded-lg p-6 max-w-md w-full mx-4 border border-[#002090]">
         <div className="text-center">
           <div className="mb-4">
             {/* Simplified warning icon with exclamation mark */}
@@ -19,7 +19,7 @@ const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, isLoading, userna
 
           <h3 className="text-xl font-bold text-white mb-2">Delete Account</h3>
 
-          <p className="text-slate-300 mb-6">
+          <p className="text-gray-300 mb-6">
             Do you really want to delete your account <strong className="text-white">{username}</strong>?
             <br />
             <span className="text-red-300 text-sm">This action cannot be undone.</span>
@@ -29,8 +29,8 @@ const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, isLoading, userna
             <button
               onClick={onClose}
               disabled={isLoading}
-              className="px-4 py-2 bg-slate-600 hover:bg-slate-500 disabled:opacity-50
-                       text-slate-200 rounded transition-colors"
+              className="px-4 py-2 bg-[#001a8a] hover:bg-[#0025a0] disabled:opacity-50
+                       text-gray-200 rounded transition-colors"
             >
               Cancel
             </button>

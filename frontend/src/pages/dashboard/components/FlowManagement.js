@@ -239,12 +239,12 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
       {/* Main Dropdown Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-3 bg-slate-800 border-2 border-slate-600 rounded-lg
-                   hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500
+        className="w-full px-4 py-3 bg-[#000847] border-2 border-[#002090] rounded-lg
+                   hover:border-[#003399] focus:outline-none focus:ring-2 focus:ring-[#3DC7FF]
                    transition-colors flex items-center justify-between text-left"
       >
         <div className="flex items-center space-x-3">
-          <div className="p-2 bg-purple-600 rounded-lg">
+          <div className="p-2 bg-[#6B3FA0] rounded-lg">
             <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                     d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -254,17 +254,17 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
             <div className="text-white font-medium">
               {selectedFlow ? selectedFlow.name : 'Select a Flow'}
             </div>
-            <div className="text-slate-400 text-sm">
+            <div className="text-gray-400 text-sm">
               {selectedFlow ? (
                 <div className="flex items-center space-x-2">
                   <span>ID: {selectedFlow.id}</span>
                   {getFlowType(selectedFlow) === 'both' && (
-                    <span className="px-1.5 py-0.5 bg-blue-600 text-blue-100 text-xs rounded">
+                    <span className="px-1.5 py-0.5 bg-[#0073E6] text-[#B8D4FF] text-xs rounded">
                       PUBLIC & PRIVATE
                     </span>
                   )}
                   {getFlowType(selectedFlow) === 'public' && (
-                    <span className="px-1.5 py-0.5 bg-green-600 text-green-100 text-xs rounded">
+                    <span className="px-1.5 py-0.5 bg-[#0073E6] text-green-100 text-xs rounded">
                       PUBLIC
                     </span>
                   )}
@@ -283,13 +283,13 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
 
         <div className="flex items-center space-x-2">
           {(isLoading || isLoadingPublic) && (
-            <svg className="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
+            <svg className="animate-spin h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
           )}
           <svg
-            className={`w-5 h-5 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -301,21 +301,21 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800 border border-slate-600
+        <div className="absolute top-full left-0 right-0 mt-2 bg-[#000847] border border-[#002090]
                         rounded-lg shadow-xl z-50 flex flex-col" style={{ maxHeight: '28rem' }}>
 
           {/* Header */}
-          <div className="border-b border-slate-600 bg-slate-700 px-4 py-3 flex-shrink-0">
+          <div className="border-b border-[#002090] bg-[#001070] px-4 py-3 flex-shrink-0">
             <div className="flex items-center justify-between">
               <h3 className="text-white font-medium">All Flows</h3>
-              <div className="flex items-center space-x-2 text-xs text-slate-400">
+              <div className="flex items-center space-x-2 text-xs text-gray-400">
                 <span className="flex items-center space-x-1">
                   <div className="w-2 h-2 bg-gray-600 rounded"></div>
                   <span>{privateFlowsCount} Private</span>
                 </span>
                 {showPublicFlows && (
                   <span className="flex items-center space-x-1">
-                    <div className="w-2 h-2 bg-green-600 rounded"></div>
+                    <div className="w-2 h-2 bg-[#0073E6] rounded"></div>
                     <span>{publicFlowsCount} Public</span>
                   </span>
                 )}
@@ -324,11 +324,11 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
           </div>
 
           {/* Search and Actions */}
-          <div className="p-3 border-b border-slate-600 bg-slate-700 flex-shrink-0">
+          <div className="p-3 border-b border-[#002090] bg-[#001070] flex-shrink-0">
             <div className="flex items-center space-x-2 mb-3">
               {/* Search Input */}
               <div className="flex-1 relative">
-                <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400"
+                <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400"
                      fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                         d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -338,8 +338,8 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
                   placeholder="Search flows..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-slate-600 border border-slate-500 rounded
-                           text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-4 py-2 bg-[#001a8a] border border-[#003399] rounded
+                           text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3DC7FF]"
                 />
               </div>
 
@@ -347,7 +347,7 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
               <button
                 onClick={refreshAllFlows}
                 disabled={isLoading || isLoadingPublic}
-                className="p-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50
+                className="p-2 bg-[#0073E6] hover:bg-[#005bb5] disabled:opacity-50
                          text-white rounded transition-colors"
                 title="Refresh all flows"
               >
@@ -363,7 +363,7 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
-                className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50
+                className="flex-1 px-3 py-2 bg-[#0073E6] hover:bg-[#005bb5] disabled:opacity-50
                          text-white rounded transition-colors flex items-center justify-center space-x-2"
               >
                 {isUploading ? (
@@ -383,7 +383,7 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
               {selectedFlow && (
                 <button
                   onClick={() => handleFlowSelect(null)}
-                  className="px-3 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded transition-colors"
+                  className="px-3 py-2 bg-[#001a8a] hover:bg-[#0025a0] text-white rounded transition-colors"
                   title="Clear selection"
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -397,8 +397,8 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
                 onClick={() => setShowPublicFlows(!showPublicFlows)}
                 className={`px-3 py-2 rounded transition-colors ${
                   showPublicFlows 
-                    ? 'bg-green-600 hover:bg-green-700 text-white' 
-                    : 'bg-slate-600 hover:bg-slate-500 text-slate-300'
+                    ? 'bg-[#0073E6] hover:bg-[#005bb5] text-white' 
+                    : 'bg-[#001a8a] hover:bg-[#0025a0] text-gray-300'
                 }`}
                 title={showPublicFlows ? 'Hide public flows' : 'Show public flows'}
               >
@@ -415,23 +415,23 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
             {(isLoading || isLoadingPublic) ? (
               <div className="p-6 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <svg className="animate-spin h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin h-6 w-6 text-[#3DC7FF]" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                 </div>
-                <p className="text-slate-400 text-sm">Loading flows...</p>
+                <p className="text-gray-400 text-sm">Loading flows...</p>
               </div>
             ) : filteredFlows.length === 0 ? (
               <div className="p-6 text-center">
-                <svg className="mx-auto h-8 w-8 text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 48 48">
+                <svg className="mx-auto h-8 w-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 48 48">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
                         d="M34 40h10v-4a6 6 0 00-10.712-3.714M34 40H14m20 0v-4a9.971 9.971 0 00-.712-3.714M14 40H4v-4a6 6 0 0110.713-3.714M14 40v-4c0-1.313.253-2.566.713-3.714m0 0A9.971 9.971 0 0124 24c4.21 0 7.813 2.602 9.288 6.286" />
                 </svg>
-                <p className="text-slate-400 text-sm">
+                <p className="text-gray-400 text-sm">
                   {searchQuery ? 'No flows match your search' : 'No flows found'}
                 </p>
-                <p className="text-slate-500 text-xs mt-1">
+                <p className="text-gray-500 text-xs mt-1">
                   {searchQuery ? 'Try a different search term' : 'Upload a flow file to get started'}
                 </p>
               </div>
@@ -443,9 +443,9 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
                 return (
                   <div
                     key={flow.id}
-                    className={`px-4 py-3 border-b border-slate-600 last:border-b-0 
-                               hover:bg-slate-700 cursor-pointer transition-colors
-                               ${selectedFlowId === flow.id ? 'bg-blue-900/30 border-blue-500/50' : ''}`}
+                    className={`px-4 py-3 border-b border-[#002090] last:border-b-0 
+                               hover:bg-[#001070] cursor-pointer transition-colors
+                               ${selectedFlowId === flow.id ? 'bg-[#0073E6]/20 border-[#3DC7FF]/50' : ''}`}
                     onClick={() => handleFlowSelect(flow)}
                   >
                     <div className="flex items-center justify-between">
@@ -463,7 +463,7 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
                                 </svg>
                                 <span>PRIVATE</span>
                               </span>
-                              <span className="px-1.5 py-0.5 bg-green-600 text-green-100 text-xs rounded flex items-center space-x-1">
+                              <span className="px-1.5 py-0.5 bg-[#0073E6] text-green-100 text-xs rounded flex items-center space-x-1">
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                                         d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m-9 9a9 9 0 919-9" />
@@ -474,7 +474,7 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
                           )}
 
                           {flowType === 'public' && (
-                            <span className="px-1.5 py-0.5 bg-green-600 text-green-100 text-xs rounded flex items-center space-x-1">
+                            <span className="px-1.5 py-0.5 bg-[#0073E6] text-green-100 text-xs rounded flex items-center space-x-1">
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                                       d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m-9 9a9 9 0 919-9" />
@@ -494,15 +494,15 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
                           )}
 
                           {selectedFlowId === flow.id && (
-                            <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <svg className="w-4 h-4 text-[#3DC7FF] flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                             </svg>
                           )}
                         </div>
-                        <p className="text-xs text-slate-400 truncate">
+                        <p className="text-xs text-gray-400 truncate">
                           {flow.description || 'No description'}
                         </p>
-                        <p className="text-xs text-slate-500 font-mono mt-1">
+                        <p className="text-xs text-gray-500 font-mono mt-1">
                           {flow.id}
                         </p>
                       </div>
@@ -511,7 +511,7 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
                       {canDelete && (
                         <button
                           onClick={(e) => handleDeleteFlow(flow.id, flow.name, e)}
-                          className="ml-2 p-1 text-slate-400 hover:text-red-400 hover:bg-red-900/20
+                          className="ml-2 p-1 text-gray-400 hover:text-red-400 hover:bg-red-900/20
                                    rounded transition-colors flex-shrink-0"
                           title={`Delete flow and associated collection`}
                         >
@@ -529,8 +529,8 @@ const FlowManagement = ({ onFlowSelect, selectedFlowId }) => {
           </div>
 
           {/* Footer */}
-          <div className="px-4 py-2 bg-slate-700 border-t border-slate-600 flex-shrink-0">
-            <p className="text-xs text-slate-400">
+          <div className="px-4 py-2 bg-[#001070] border-t border-[#002090] flex-shrink-0">
+            <p className="text-xs text-gray-400">
               {filteredFlows.length} of {totalFlowsCount} flows
               {selectedFlow && ` • Selected: ${selectedFlow.name}`}
             </p>

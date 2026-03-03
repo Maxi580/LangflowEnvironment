@@ -84,13 +84,14 @@ const Dashboard = ({ user }) => {
   };
 
   return (
-    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden">
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex-shrink-0">
+    <div className="h-screen flex flex-col overflow-hidden" style={{backgroundColor: '#0073E6'}}>
+      <header style={{backgroundColor: '#00005C'}} className="border-b border-slate-700 px-4 py-3 flex-shrink-0">
         <div className="flex items-center justify-between">
-          <div className="flex items-center">
+          <div className="flex items-center space-x-4">
+            <img src="/logo.png" alt="Logo" className="h-8 w-auto" />
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="px-4 py-2 bg-red-800 hover:bg-red-700 text-red-200 rounded transition-colors
+              className="px-4 py-2 bg-gray-600 hover:bg-red-600 text-gray-200 hover:text-white rounded transition-colors
                        flex items-center space-x-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -101,21 +102,17 @@ const Dashboard = ({ user }) => {
             </button>
           </div>
 
-          <div className="flex items-center space-x-3">
-            <img src="/logo.png" alt="Atos" className="h-8 opacity-80" />
-            <div className="flex flex-col items-center">
-              <h1 className="text-xl font-bold text-white">Agenten Dashboard</h1>
-              <span className="text-slate-300 text-sm mt-1">
-                Welcome, {username || 'User'}
-              </span>
-            </div>
+          <div className="flex flex-col items-center">
+            <h1 className="text-xl font-bold text-white">Reference Creation</h1>
+            <span className="text-slate-300 text-sm mt-1">
+              Welcome, {username || 'User'}
+            </span>
           </div>
 
           <div className="flex items-center space-x-2">
             <button
               onClick={() => langflowRedirectService.redirectToLangflow("/flows", true)}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors
-                        flex items-center space-x-2"
+              className="px-4 py-2 text-white rounded transition-colors flex items-center space-x-2" style={{backgroundColor: '#6B3FA0'}}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -127,8 +124,7 @@ const Dashboard = ({ user }) => {
             <button
               onClick={handleLogout}
               disabled={isLoggingOut}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50
-                        disabled:cursor-not-allowed text-white rounded transition-colors"
+              className="px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors" style={{backgroundColor: '#0073E6'}}
             >
               {isLoggingOut ? 'Logging out...' : 'Logout'}
             </button>

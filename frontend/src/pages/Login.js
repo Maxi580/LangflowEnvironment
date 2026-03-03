@@ -12,7 +12,7 @@ const LoginPage = ({ onLoginSuccess }) => {
   const [phraseIndex, setPhraseIndex] = useState(0);
 
   const textGlowStyle = {
-    textShadow: '0 0 3px rgba(130, 220, 255, 0.2)'
+    textShadow: '0 0 6px rgba(61, 199, 255, 0.4)'
   };
 
   const typingDelay = 100;
@@ -76,10 +76,8 @@ const LoginPage = ({ onLoginSuccess }) => {
 
       if (result.success) {
         setMessage({ type: 'success', text: 'Login successful! Redirecting...' });
-
         setUsername('');
         setPassword('');
-
         if (onLoginSuccess) {
           onLoginSuccess(result.user);
         }
@@ -125,9 +123,7 @@ const LoginPage = ({ onLoginSuccess }) => {
           if (loginResult.success) {
             setUsername('');
             setPassword('');
-
             setMessage({ type: 'success', text: 'Registration and login successful! Redirecting...' });
-
             if (onLoginSuccess) {
               onLoginSuccess(loginResult.user);
             }
@@ -163,12 +159,10 @@ const LoginPage = ({ onLoginSuccess }) => {
     }
   };
 
-
   const clearMessage = () => {
     setMessage({ type: '', text: '' });
   };
 
-  // Clear message when user starts typing
   useEffect(() => {
     if (message.text) {
       const timer = setTimeout(clearMessage, 100);
@@ -183,92 +177,110 @@ const LoginPage = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-slate-900 flex items-center justify-center">
-      <div className="w-full max-w-md px-8 py-12 flex flex-col items-center">
-        <div className="mb-10">
-          <div className="max-w-full pb-2">
-            <h1 className="text-4xl md:text-5xl font-bold text-slate-200 tracking-tight flex justify-center">
-              <div className="flex whitespace-nowrap">
-                <span>Agents that&nbsp;</span>
-                <span
-                  className="italic text-sky-300"
-                  style={textGlowStyle}
-                >
-                  {currentPhrase}
-                  <span className="animate-blink">|</span>
-                </span>
-              </div>
-            </h1>
-          </div>
-        </div>
+    <div className="min-h-screen w-full flex flex-col" style={{backgroundColor: '#00005C'}}>
+      {/* Logo top-left */}
+      <div className="px-8 pt-6">
+        <img src="/logo.png" alt="Logo" className="h-14 w-auto" />
+      </div>
 
-        <div className="w-full mb-8">
-          <div className="mb-4">
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Username"
-              className="w-full px-4 py-3 bg-slate-800 border-2 border-slate-600 rounded-full text-slate-200
-                        placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400
-                        transition-colors"
-              disabled={isLoading}
-              autoComplete="username"
-            />
-          </div>
-
-          <div className="mb-4">
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Password"
-              className="w-full px-4 py-3 bg-slate-800 border-2 border-slate-600 rounded-full text-slate-200
-                        placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400
-                        transition-colors"
-              disabled={isLoading}
-              autoComplete="current-password"
-            />
-          </div>
-
-          {message.text && (
-            <div className={`mb-4 px-4 py-3 rounded-lg text-sm transition-all duration-300 ${
-              message.type === 'error'
-                ? 'bg-red-900/50 border border-red-700 text-red-200'
-                : 'bg-green-900/50 border border-green-700 text-green-200'
-            }`}>
-              {message.text}
+      {/* Centered content */}
+      <div className="flex-1 flex items-center justify-center">
+        <div className="w-full max-w-md px-8 pb-24 flex flex-col items-center">
+          <div className="mb-10">
+            <div className="max-w-full pb-2">
+              <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight flex justify-center">
+                <div className="flex whitespace-nowrap">
+                  <span>Agents that&nbsp;</span>
+                  <span
+                    className="italic"
+                    style={{...textGlowStyle, color: '#3DC7FF'}}
+                  >
+                    {currentPhrase}
+                    <span className="animate-blink">|</span>
+                  </span>
+                </div>
+              </h1>
             </div>
-          )}
-
-          <div className="flex flex-col space-y-3 mt-6">
-            <button
-              onClick={handleLogin}
-              disabled={isLoading || !username || !password}
-              className="w-full px-4 py-3 bg-sky-500 text-white rounded-full font-medium
-                        hover:bg-sky-600 transition-colors focus:outline-none focus:ring-2 focus:ring-sky-300
-                        disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? 'Logging in...' : 'Login'}
-            </button>
-
-            <button
-              onClick={handleRegister}
-              disabled={isLoading || !username || !password}
-              className="w-full px-4 py-3 bg-slate-800 text-slate-200 border-2 border-slate-600 rounded-full font-medium
-                        hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500
-                        disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? 'Creating Account...' : 'Register'}
-            </button>
           </div>
 
-          <div className="mt-6 text-center">
-            <p className="text-sm text-slate-400">
-              Enter your credentials to login or create a new account
-            </p>
+          <div className="w-full mb-8">
+            <div className="mb-4">
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Username"
+                className="w-full px-4 py-3 rounded-full text-white
+                          placeholder-gray-400 focus:outline-none transition-all"
+                style={{backgroundColor: '#001070', border: '2px solid #0073E6'}}
+                onFocus={e => { e.target.style.borderColor = '#3DC7FF'; e.target.style.boxShadow = '0 0 0 3px rgba(61,199,255,0.25)'; }}
+                onBlur={e => { e.target.style.borderColor = '#0073E6'; e.target.style.boxShadow = 'none'; }}
+                disabled={isLoading}
+                autoComplete="username"
+              />
+            </div>
+
+            <div className="mb-4">
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Password"
+                className="w-full px-4 py-3 rounded-full text-white
+                          placeholder-gray-400 focus:outline-none transition-all"
+                style={{backgroundColor: '#001070', border: '2px solid #0073E6'}}
+                onFocus={e => { e.target.style.borderColor = '#3DC7FF'; e.target.style.boxShadow = '0 0 0 3px rgba(61,199,255,0.25)'; }}
+                onBlur={e => { e.target.style.borderColor = '#0073E6'; e.target.style.boxShadow = 'none'; }}
+                disabled={isLoading}
+                autoComplete="current-password"
+              />
+            </div>
+
+            {message.text && (
+              <div className={`mb-4 px-4 py-3 rounded-lg text-sm transition-all duration-300 ${
+                message.type === 'error'
+                  ? 'bg-red-900/50 border border-red-700 text-red-200'
+                  : 'bg-green-900/50 border border-green-700 text-green-200'
+              }`}>
+                {message.text}
+              </div>
+            )}
+
+            <div className="flex flex-col space-y-3 mt-6">
+              <button
+                onClick={handleLogin}
+                disabled={isLoading || !username || !password}
+                className="w-full px-4 py-3 text-white rounded-full font-medium
+                          transition-colors focus:outline-none focus:ring-2
+                          disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{backgroundColor: '#0073E6'}}
+                onMouseEnter={e => { if (!isLoading) e.currentTarget.style.backgroundColor = '#005bb5'; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#0073E6'; }}
+              >
+                {isLoading ? 'Logging in...' : 'Login'}
+              </button>
+
+              <button
+                onClick={handleRegister}
+                disabled={isLoading || !username || !password}
+                className="w-full px-4 py-3 text-white rounded-full font-medium
+                          transition-colors focus:outline-none focus:ring-2
+                          disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{backgroundColor: '#001070', border: '2px solid #0073E6'}}
+                onMouseEnter={e => { if (!isLoading) e.currentTarget.style.backgroundColor = '#001a8a'; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#001070'; }}
+              >
+                {isLoading ? 'Creating Account...' : 'Register'}
+              </button>
+            </div>
+
+            <div className="mt-6 text-center">
+              <p className="text-sm text-gray-400">
+                Enter your credentials to login or create a new account
+              </p>
+            </div>
           </div>
         </div>
       </div>

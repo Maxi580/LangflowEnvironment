@@ -274,7 +274,7 @@ const FileManagement = ({
       );
     }
     return (
-      <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-4 h-4 text-[#3DC7FF]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
       </svg>
     );
@@ -287,23 +287,23 @@ const FileManagement = ({
   const failedFiles = processingFiles.filter(file => file.status === 'failed');
 
   return (
-    <div className="bg-slate-800 rounded-xl overflow-hidden">
+    <div className="bg-[#000847] rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-[#002090] flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <div className="p-2 bg-purple-600 rounded-lg">
+          <div className="p-2 bg-[#6B3FA0] rounded-lg">
             <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
           </div>
           <div>
             <h3 className="text-white font-medium">File Management</h3>
-            <p className="text-slate-400 text-sm">Upload and manage your files</p>
+            <p className="text-gray-400 text-sm">Upload and manage your files</p>
           </div>
         </div>
 
         <div className="flex items-center space-x-2">
-          <span className="text-slate-400 text-sm">
+          <span className="text-gray-400 text-sm">
             {totalFiles} files
             {activelyProcessingFiles.length > 0 && (
               <span className="text-orange-400 ml-1">
@@ -333,8 +333,8 @@ const FileManagement = ({
             disabled={isFilesLoading || !flowId}
             className={`p-1 rounded transition-colors ${
               isFilesLoading || !flowId
-                ? 'cursor-not-allowed text-slate-600'
-                : 'hover:bg-slate-600 text-slate-400 hover:text-slate-300'
+                ? 'cursor-not-allowed text-gray-600'
+                : 'hover:bg-[#001a8a] text-gray-400 hover:text-gray-300'
             }`}
             title="Refresh file list"
           >
@@ -350,10 +350,10 @@ const FileManagement = ({
 
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1 hover:bg-slate-600 rounded transition-colors"
+            className="p-1 hover:bg-[#001a8a] rounded transition-colors"
           >
             <svg
-              className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+              className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -371,10 +371,10 @@ const FileManagement = ({
           <div
             className={`flex items-center justify-center w-full px-3 py-2 text-sm border-2 border-dashed rounded-lg transition-colors cursor-pointer
               ${!flowId || isUploading
-                ? 'border-slate-600 text-slate-500 cursor-not-allowed'
+                ? 'border-[#002090] text-gray-500 cursor-not-allowed'
                 : isDragging
-                  ? 'border-blue-500 bg-blue-500/10 text-blue-400'
-                  : 'border-slate-500 text-slate-300 hover:border-blue-500 hover:text-blue-400'
+                  ? 'border-[#3DC7FF] bg-[#3DC7FF]/10 text-[#3DC7FF]'
+                  : 'border-[#003399] text-gray-300 hover:border-[#3DC7FF] hover:text-[#3DC7FF]'
               }`}
             onDragEnter={handleDragEnter}
             onDragLeave={handleDragLeave}
@@ -419,7 +419,7 @@ const FileManagement = ({
 
         {/* Loading State */}
         {isFilesLoading && (
-          <div className="flex items-center justify-center py-4 text-slate-400 text-sm">
+          <div className="flex items-center justify-center py-4 text-gray-400 text-sm">
             <svg className="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -434,7 +434,7 @@ const FileManagement = ({
             <div className="text-red-400 text-sm">{filesError}</div>
             <button
               onClick={fetchFiles}
-              className="mt-2 text-xs text-blue-400 hover:text-blue-300 underline"
+              className="mt-2 text-xs text-[#3DC7FF] hover:text-[#66d4ff] underline"
             >
               Retry
             </button>
@@ -450,7 +450,7 @@ const FileManagement = ({
                 {(isExpanded ? completedFiles : completedFiles.slice(0, 3)).map((file) => (
                   <div
                     key={file.file_id}
-                    className="flex items-center justify-between p-2 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors group"
+                    className="flex items-center justify-between p-2 bg-[#001070] rounded-lg hover:bg-[#001a8a] transition-colors group"
                   >
                     <div className="flex items-center space-x-2 flex-1 min-w-0">
                       <div className="flex-shrink-0">
@@ -458,7 +458,7 @@ const FileManagement = ({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm text-white truncate">{file.file_name}</div>
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-gray-400">
                           {fileService.formatFileSize(file.file_size)} • {file.file_type.toUpperCase()}
                         </div>
                       </div>
@@ -469,7 +469,7 @@ const FileManagement = ({
                       className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-600 rounded transition-all"
                       title="Delete file"
                     >
-                      <svg className="w-3 h-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
@@ -480,7 +480,7 @@ const FileManagement = ({
                 {!isExpanded && completedFiles.length > 3 && (
                   <button
                     onClick={() => setIsExpanded(true)}
-                    className="w-full text-center py-2 text-sm text-slate-400 hover:text-slate-300 transition-colors"
+                    className="w-full text-center py-2 text-sm text-gray-400 hover:text-gray-300 transition-colors"
                   >
                     +{completedFiles.length - 3} more files
                   </button>
@@ -513,7 +513,7 @@ const FileManagement = ({
                               <div className="text-sm text-white truncate">{file.file_name}</div>
                               {getStatusBadge(file.status)}
                             </div>
-                            <div className="text-xs text-slate-400">
+                            <div className="text-xs text-gray-400">
                               {fileService.formatFileSize(file.file_size)}
                             </div>
                           </div>
@@ -525,7 +525,7 @@ const FileManagement = ({
                           className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-600 rounded transition-all"
                           title="Cancel processing"
                         >
-                          <svg className="w-3 h-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
@@ -555,7 +555,7 @@ const FileManagement = ({
                               <div className="text-sm text-white truncate">{file.file_name}</div>
                               {getStatusBadge(file.status)}
                             </div>
-                            <div className="text-xs text-slate-400">
+                            <div className="text-xs text-gray-400">
                               {fileService.formatFileSize(file.file_size)}
                               {file.error && (
                                 <span className="text-red-400 ml-2">• {file.error}</span>
@@ -569,7 +569,7 @@ const FileManagement = ({
                           className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-600 rounded transition-all"
                           title="Remove failed file"
                         >
-                          <svg className="w-3 h-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
@@ -585,25 +585,25 @@ const FileManagement = ({
         {/* No Files State */}
         {!isFilesLoading && !filesError && totalFiles === 0 && (
           <div className="text-center py-6">
-            <svg className="w-8 h-8 mx-auto mb-2 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-8 h-8 mx-auto mb-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <p className="text-slate-400 text-sm">No files uploaded</p>
-            <p className="text-slate-500 text-xs mt-1">Drag & drop files or click to upload</p>
+            <p className="text-gray-400 text-sm">No files uploaded</p>
+            <p className="text-gray-500 text-xs mt-1">Drag & drop files or click to upload</p>
           </div>
         )}
 
         {/* Collection Info */}
         {isExpanded && flowId && (
-          <div className="pt-3 border-t border-slate-700">
-            <div className="text-xs text-slate-400 mb-2">Collection ID:</div>
-            <div className="bg-slate-700 text-xs text-slate-300 px-2 py-1 rounded font-mono truncate">
+          <div className="pt-3 border-t border-[#002090]">
+            <div className="text-xs text-gray-400 mb-2">Collection ID:</div>
+            <div className="bg-[#001070] text-xs text-gray-300 px-2 py-1 rounded font-mono truncate">
               {flowId}
             </div>
             {pollingInterval && (
               <div className="mt-2">
-                <div className="text-xs text-slate-400 mb-1">Polling Interval:</div>
-                <div className="bg-slate-700 text-xs text-slate-300 px-2 py-1 rounded">
+                <div className="text-xs text-gray-400 mb-1">Polling Interval:</div>
+                <div className="bg-[#001070] text-xs text-gray-300 px-2 py-1 rounded">
                   {pollingInterval / 1000} seconds
                 </div>
               </div>
