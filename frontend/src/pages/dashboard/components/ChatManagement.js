@@ -130,9 +130,9 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
     const parts = [];
     const langs = outputSettings.languages || [];
     if (langs.length > 0) {
-      parts.push(`The user wants the text to be written in ${langs.join(', ')}.`);
+      parts.push(`{output_languages: [${langs.map(l => `"${l}"`).join(', ')}]}`);
     } else {
-      parts.push('The user wants the text to be written in the language that the documents are made of.');
+      parts.push(`{output_languages: "auto"}`);
     }
     const length = outputSettings.textLength;
     if (length) {
@@ -243,21 +243,21 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
       const ext = filename.split('.').pop()?.toLowerCase();
       if (contentType?.includes('presentation') || ext === 'pptx') {
         return (
-          <svg className="w-5 h-5" style={{color:'#6B3FA0'}} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 flex-shrink-0" style={{color:'#6B3FA0'}} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         );
       } else if (contentType?.includes('pdf') || ext === 'pdf') {
         return (
-          <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 flex-shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
           </svg>
         );
       }
       return (
-        <svg className="w-5 h-5" style={{color:'#0073E6'}} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5 flex-shrink-0" style={{color:'#0073E6'}} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
@@ -331,21 +331,23 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
                   📄 Generated file{message.metadata.generatedFiles.length > 1 ? 's' : ''}:
                 </div>
                 {message.metadata.generatedFiles.map((generatedFile, index) => (
-                  <div key={index} className="rounded-xl p-3 mb-2 last:mb-0"
+                  <div key={index} className="rounded-xl p-3 mb-2 last:mb-0 overflow-hidden"
                        style={{background:'rgba(0,115,230,0.05)', border:'1px solid rgba(0,115,230,0.15)'}}>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         {getFileTypeIcon(generatedFile.filename, generatedFile.content_type)}
-                        <div>
-                          <div className="text-sm font-medium" style={{color:'#1e293b'}}>{generatedFile.filename}</div>
-                          <div className="text-xs" style={{color:'#64748b'}}>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium truncate" style={{color:'#1e293b'}}>
+                            {generatedFile.filename}
+                          </div>
+                          <div className="text-xs truncate" style={{color:'#64748b'}}>
                             {formatFileSize(generatedFile.size)} • {generatedFile.content_type.split('/').pop().toUpperCase()}
                           </div>
                         </div>
                       </div>
                       <button
                         onClick={() => handleDownload(generatedFile)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all"
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all flex-shrink-0"
                         style={{background:'#0073E6', color:'white'}}
                         onMouseEnter={e => e.currentTarget.style.background='#00005C'}
                         onMouseLeave={e => e.currentTarget.style.background='#0073E6'}
@@ -385,7 +387,6 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
 
   const renderEmptyState = () => (
     <div className="flex flex-col items-center justify-center h-full text-center px-8">
-      {/* Blue accent bar at top of empty state */}
       <div className="w-14 h-14 mb-4 rounded-2xl flex items-center justify-center"
            style={{background:'#0073E6'}}>
         <svg className="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -493,7 +494,6 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
           )}
         </div>
       </div>
-
 
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0"
