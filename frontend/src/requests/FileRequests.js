@@ -111,7 +111,6 @@ class FileRequests {
 
       if (!response.ok) {
         if (response.status === 404) {
-          console.log(`Collection for flow '${flowId}' not found, creating it...`);
           await this.createCollection(flowId);
           return [];
         }

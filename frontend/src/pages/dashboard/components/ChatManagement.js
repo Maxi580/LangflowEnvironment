@@ -138,7 +138,7 @@ const ChatManagement = ({ selectedFlow, files = [], messages, setMessages, outpu
     if (length) {
       parts.push(`The user wants the text to be approximately ${length} words long.`);
     } else {
-      parts.push('The user has not specified a desired text length. Use a reasonable default.');
+      parts.push('The user has not specified a desired text length. Use the defined/reasonable default.');
     }
     const pptx = outputSettings.createPptx ?? true;
     parts.push(`{create_pptx: ${pptx}}`);

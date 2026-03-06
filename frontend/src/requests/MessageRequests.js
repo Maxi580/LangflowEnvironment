@@ -136,14 +136,6 @@ class MessageService {
         formData.append(`attached_files`, file);
       });
 
-      console.log("Sending message with files via backend:", {
-        flowId,
-        sessionId,
-        messageLength: message.length,
-        attachedFilesCount: attachedFiles.length,
-        persistentFilesCount: persistentFiles.length
-      });
-
       const response = await TokenRefreshService.authenticatedFetch(
         config.api.getMessagesSendUrl(),
         {
@@ -176,8 +168,6 @@ class MessageService {
         size: file.size,
         base64_data: file.base64_data
         }));
-        console.log(`${generatedFiles.length} generated file(s) received:`,
-                 generatedFiles.map(f => f.filename));
     }
 
     return createMessage(responseData.response, 'bot', {
@@ -201,12 +191,10 @@ class MessageService {
     try {
       const newSessionId = generateSessionId();
       this.setCurrentSessionId(newSessionId);
-      console.log("Session cleared - new session:", newSessionId);
       return newSessionId;
     } catch (error) {
       console.warn('Error during session clear:', error);
       this.currentSessionId = null;
-      console.log("Session cleared locally");
       return null;
     }
   }
@@ -254,7 +242,6 @@ class MessageService {
    */
   setCurrentSessionId(sessionId) {
     this.currentSessionId = sessionId;
-    console.log("Session ID set to:", sessionId);
   }
 }
 

@@ -361,14 +361,20 @@ class FlowService:
         if not has_access:
             raise ValueError(f"Flow '{flow_id}' not found or access denied")
 
-        api_key_response = await self.langflow_repo.create_api_key(
-            token=token,
-            name=f"temp_execution_{flow_id}",
-            description="Temporary key for flow execution"
-        )
+        try:
+            api_key_response = await self.langflow_repo.create_api_key(
+                token=token,
+                name=f"temp_execution_{flow_id}",
+                description="Temporary key for flow execution"
+            )
+        except Exception as e:
+            print(f"API key creation failed: {e}")
+            raise
 
         api_key = api_key_response.get("api_key")
         api_key_id = api_key_response.get("id")
+
+        await asyncio.sleep(0.5)
 
         try:
             response = await self.langflow_repo.run_flow(flow_id, payload, api_key)

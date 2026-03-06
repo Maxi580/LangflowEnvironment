@@ -79,7 +79,6 @@ class FlowRequests {
       const data = await response.json();
 
       if (Array.isArray(data)) {
-        console.log(`✅ Fetched ${data.length} public flows`);
         return data;
       } else {
         console.error("Unexpected public flows response format:", data);

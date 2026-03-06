@@ -1,6 +1,7 @@
+import re
 from langflow.custom import Component
 from langflow.io import Output, MultilineInput
-from langflow.schema import Message
+from langflow.schema.message import Message
 from pptx import Presentation
 from pptx.util import Inches
 from pptx.dml.color import RGBColor
@@ -64,6 +65,13 @@ class AtosTemplatePowerPointComponent(Component):
             info="Base64 encoded company logo image (optional - will replace placeholder logo)",
             required=False,
         ),
+        MultilineInput(
+            name="create_pptx_flag",
+            display_name="Create PPTX Flag",
+            info="Wire the 'create_pptx' output from the Extract PPTX Flag component here. Expects 'true' or 'false'.",
+            required=False,
+            value="true",  # default: always create
+        ),
     ]
 
     outputs = [
@@ -75,19 +83,13 @@ class AtosTemplatePowerPointComponent(Component):
     ]
 
     def find_and_replace_text_in_slide(self, slide, replacements):
-        """
-        Find and replace text in all text boxes on a slide
-        """
         replacements_made = 0
 
         for shape in slide.shapes:
             if hasattr(shape, "text_frame"):
                 text_frame = shape.text_frame
-
                 for paragraph in text_frame.paragraphs:
                     for run in paragraph.runs:
-                        original_text = run.text
-
                         for placeholder, replacement in replacements.items():
                             if placeholder in run.text:
                                 run.text = run.text.replace(placeholder, replacement)
@@ -109,20 +111,14 @@ class AtosTemplatePowerPointComponent(Component):
         return replacements_made
 
     def decode_base64_image(self, base64_string):
-        """
-        Decode base64 image string and return image bytes
-        """
         try:
             if base64_string.startswith('data:'):
                 base64_string = base64_string.split(',', 1)[1]
 
             image_data = base64.b64decode(base64_string)
-
             img = Image.open(io.BytesIO(image_data))
 
-            # Convert to RGB if necessary (for JPEG compatibility)
             if img.mode in ('RGBA', 'LA', 'P'):
-                # Create white background
                 background = Image.new('RGB', img.size, (255, 255, 255))
                 if img.mode == 'P':
                     img = img.convert('RGBA')
@@ -142,22 +138,19 @@ class AtosTemplatePowerPointComponent(Component):
     def add_logo_at_fixed_position(self, slide, logo_data):
         try:
             cm_to_inches = 0.393701
-
-            left = Inches(29.81 * cm_to_inches)
-            top = Inches(0.81 * cm_to_inches)
-            width = Inches(2.87 * cm_to_inches)
-            height = Inches(2.53 * cm_to_inches)
+            left   = Inches(29.81 * cm_to_inches)
+            top    = Inches(0.81  * cm_to_inches)
+            width  = Inches(2.87  * cm_to_inches)
+            height = Inches(2.53  * cm_to_inches)
 
             with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
                 tmp_file.write(logo_data)
                 tmp_logo_path = tmp_file.name
 
             try:
-                pic = slide.shapes.add_picture(tmp_logo_path, left, top, width, height)
-
-                print(f"✓ Added logo at position ({29.81:.2f}cm, {0.81:.2f}cm) with size {2.87:.2f}cm x {2.53:.2f}cm")
+                slide.shapes.add_picture(tmp_logo_path, left, top, width, height)
+                print(f"✓ Added logo at position (29.81cm, 0.81cm) with size 2.87cm x 2.53cm")
                 return True
-
             finally:
                 try:
                     os.unlink(tmp_logo_path)
@@ -171,11 +164,10 @@ class AtosTemplatePowerPointComponent(Component):
     def add_logo_placeholder(self, slide):
         try:
             cm_to_inches = 0.393701
-
-            left = Inches(29.81 * cm_to_inches)
-            top = Inches(0.81 * cm_to_inches)
-            width = Inches(2.87 * cm_to_inches)
-            height = Inches(2.53 * cm_to_inches)
+            left   = Inches(29.81 * cm_to_inches)
+            top    = Inches(0.81  * cm_to_inches)
+            width  = Inches(2.87  * cm_to_inches)
+            height = Inches(2.53  * cm_to_inches)
 
             textbox = slide.shapes.add_textbox(left, top, width, height)
             text_frame = textbox.text_frame
@@ -191,7 +183,7 @@ class AtosTemplatePowerPointComponent(Component):
             line.color.rgb = RGBColor(200, 200, 200)
             line.width = Inches(0.01)
 
-            print(f"✓ Added logo placeholder at position ({29.81:.2f}cm, {0.81:.2f}cm)")
+            print(f"✓ Added logo placeholder at position (29.81cm, 0.81cm)")
             return True
 
         except Exception as e:
@@ -199,23 +191,27 @@ class AtosTemplatePowerPointComponent(Component):
             return False
 
     def create_powerpoint(self) -> Message:
-        """Create PowerPoint from Atos template by replacing placeholders"""
+        # ── Early exit if create_pptx is false ──────────────────────────
+        flag = (self.create_pptx_flag or "").strip().lower()
+        if flag == "false":
+            print("ℹ️ create_pptx is false — skipping PowerPoint generation.")
+            return Message(text="")
+        # ────────────────────────────────────────────────────────────────
 
         try:
             if not os.path.exists(TEMPLATE_PATH):
-                return (f"❌ Template file not found at {TEMPLATE_PATH}. Please save your PowerPoint template as "
-                        f"'template.pptx' in the same directory.")
+                return Message(text=f"❌ Template file not found at {TEMPLATE_PATH}.")
 
             prs = Presentation(TEMPLATE_PATH)
             print(f"✓ Loaded template with {len(prs.slides)} slides")
 
             replacements = {
                 '{{CUSTOMER_NAME}}': self.customer_name,
-                '{{ABOUT_CLIENT}}': self.about_client,
-                '{{PROJECT_NAME}}': self.project_name,
+                '{{ABOUT_CLIENT}}':  self.about_client,
+                '{{PROJECT_NAME}}':  self.project_name,
                 '{{CHALLENGE_TEXT}}': self.challenge_text,
                 '{{SOLUTION_TEXT}}': self.solution_text,
-                '{{IMPACT_TEXT}}': self.impact_text,
+                '{{IMPACT_TEXT}}':   self.impact_text,
             }
 
             has_logo = self.logo_base64 and self.logo_base64.strip()
@@ -232,7 +228,6 @@ class AtosTemplatePowerPointComponent(Component):
 
             for slide_idx, slide in enumerate(prs.slides):
                 print(f"\n🔄 Processing slide {slide_idx + 1}...")
-
                 self.find_and_replace_text_in_slide(slide, replacements)
 
                 if slide_idx == 0:
@@ -264,7 +259,7 @@ size:{len(file_content)}
 data:{base64_content}
 </{PPTX_MAGIC_BYTES}>"""
 
-            return text_response
+            return Message(text=text_response)
 
         except Exception as e:
-            return f"❌ Failed to create PowerPoint from template: {str(e)}"
+            return Message(text=f"❌ Failed to create PowerPoint from template: {str(e)}")
